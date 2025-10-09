@@ -37,7 +37,7 @@ app.config(['$stateProvider', '$urlRouterProvider',
     function($stateProvider, $urlRouterProvider){
 
         // TODO: external bootstrap with now testing build!
-        $urlRouterProvider.otherwise("/server/7.0.0/latest");
+        $urlRouterProvider.otherwise("/server/8.0.0/latest");
         $stateProvider              
             .state('target', {
                 url: "/:target",
@@ -1007,11 +1007,21 @@ angular.module('svc.data', [])
             _targetVersions = {}
             _buildJobs = []
             _buildJobsActive = []
-            _sideBarItems = []
+            _sideBarItems = {}
             _filterBy = DEFAULT_FILTER_BY
             _buildsFilterBy = DEFAULT_BUILDS_FILTER_BY
             _initUrlParams = null
             _buildInfo = {}
+            _jobsPage = 0;
+            _jobsPerPage = 20;
+            _availableFilters = {
+                features: "component",
+                platforms: "os",
+                serverVersions: "server_version",
+                dapiVersions: "dapi",
+                nebulaVersions: "dni",
+                envVersions: "env"
+            }
 
             function updateLocationUrl(type, key, disabled){
                 var typeArgs = $location.search()[type]
@@ -1055,12 +1065,12 @@ angular.module('svc.data', [])
 
             function disableItem(key, type){
 
-                var jobtype = type == "platforms" ? "os" : "component"
-                jobtype = type == "serverVersions" ? "server_version" : jobtype
+
+                var jobtype = _availableFilters[type]
 
                 // diabling item: remove from active list of build jobs
                 _buildJobsActive = _.reject(_buildJobsActive, function(job){
-                    return job[jobtype] == key
+                    return job[jobtype] == key || job.variants && job.variants[jobtype] === key
                 })
                 updateSidebarItemState(type, key, true)
 
@@ -1068,26 +1078,31 @@ angular.module('svc.data', [])
 
             function enableItem(key, type){
 
-                var jobtype = type == "platforms" ? "os" : "component"
-                jobtype = type == "serverVersions" ? "server_version" : jobtype
+                
+                var jobtype = _availableFilters[type]
 
                 // enabling item so include in active list of build jobs
                 var includeJobs = _.filter(_buildJobs, function(job){
 
                     // detect if job matches included key
-                    if(job[jobtype] == key){
-
-                        // get alternate of current type..
-                        // ie... so if we are adding back an os key
-                        // then get the component listed for this job
-                        var altTypes = jobtype == "os" ? ["features", "component", "serverVersions"] : ["platforms", "os", "server_version"]
-                        var sideBarItem = _.find(_sideBarItems[altTypes[0]], {"key":job[altTypes[1]]})
-
+                    // show jobs not matching variant if all variants selected
+                    if(job[jobtype] == key || (job.variants && job.variants[jobtype] === key)){
+                        // filter out jobs if it matches another filter that is disabled
+                        for (var map_key in _availableFilters) {
+                            if (type === map_key) {
+                                continue
+                            }
+                            var map_value = _availableFilters[map_key]
+                            var sideBarItem = _sideBarItems[map_key].find(function(item) {
+                                return item.key === job[map_value] || (job.variants && job.variants[map_value] === item.key);
+                            })
+                            if (sideBarItem && sideBarItem.disabled) {
+                                return false
+                            }
+                        }
                         // only include this job if it's alternate type isn't disabled
                         // ie.. do not add back goxdcr if os is centos and centos is disabled
-                        if (!sideBarItem.disabled){
-                            return true
-                        }
+                        return true
                     }
                 })
                 _buildJobsActive = _buildJobsActive.concat(includeJobs)
@@ -1221,6 +1236,21 @@ angular.module('svc.data', [])
                 },
                 setSideBarItems: function(items){
                     _sideBarItems = items
+
+                    for (var item in items) {
+                        if (!_availableFilters[item]) {
+                            _availableFilters[item] = item
+                        }
+                    }
+
+                    // remove any filters that no longer apply (e.g. after switching builds)
+                    _.forEach(_availableFilters, function(_, filterName) {
+                        if (!_sideBarItems[filterName]) {
+                            delete _availableFilters[filterName]
+                        }
+
+                    })
+
                     _sideBarItems['buildVersion'] = buildNameWithVersion()
 
                     // default behavior is to initialize sideBarItems
@@ -1243,7 +1273,7 @@ angular.module('svc.data', [])
                         // only enable urlParams
                         _.mapKeys(_initUrlParams, function(values, type){
 
-                            if(["platforms", "features", "serverVersions"].indexOf(type) != -1){
+                            if(Object.keys(_availableFilters).indexOf(type) != -1){
                                 var keys = values.split(",")
                                 keys.forEach(function(k){
                                     enableItem(k, type)
@@ -1264,22 +1294,22 @@ angular.module('svc.data', [])
                     // enabled build jobs
 
                     // filter out just jobs with this key
-                    var jobtype = type == "platforms" ? "os" : "component"
-                    jobtype = type == "serverVersions" ? "server_version" : jobtype
+                    var jobtype = _availableFilters[type]
                     var subset = _buildJobsActive
                     if (type != "build"){
                         subset = _.filter(_buildJobsActive, function(job){
-                            return job[jobtype] == key
+                            // include in stat if jobtype matches, jobtype is a variant and no variants or jobtype is a variant and variant matches
+                            return job[jobtype] == key || (!job[jobtype] && !job.variants) || (job.variants && job.variants[jobtype] == key)
                         })
                     }
-		    subset = _.reject(subset, "olderBuild", true)
+		            subset = _.reject(subset, "olderBuild", true)
                     subset = _.reject(subset, "deleted", true)
-                    subset = _.uniqBy(subset, "name")
 
                     // calculate absolute stats
                     var absTotal = _.sum(_.map(_.uniq(subset), "totalCount"))
                     var absFail = _.sum(_.map(_.uniq(subset), "failCount"))
                     var absPending = _.sum(_.map(_.uniq(subset), "pending"))
+                    var absSkip = _.sum(_.map(_.uniq(subset), "skipCount"))
                     if (!absTotal){
                         absTotal = 0;
                     }
@@ -1289,19 +1319,25 @@ angular.module('svc.data', [])
                     if (!absPending){
                         absPending = 0;
                     }
+                    if (!absSkip){
+                        absSkip = 0;
+                    }
                     var absStats = {
-                        passed: absTotal-absFail,
+                        passed: absTotal-absFail-absSkip,
                         failed: absFail,
-                        pending: absPending
+                        pending: absPending,
+                        skipped: absSkip,
+                        total: absTotal+absPending
                     }
 
                     // calculate percentage based stats
-                    var passedPerc = getPercOfVal(absStats, absStats.passed)
+                    var passedPerc = getPercOfVal(absStats, absStats.passed, false)
                     var percStats = {
                         run: getItemPercStr(absStats),
                         passed: wrapPercStr(passedPerc),
-                        failed: getPercOfValStr(absStats, absStats.failed),
-                        pending: getPercOfValStr(absStats, absStats.pending),
+                        failed: getPercOfValStr(absStats, absStats.failed, false),
+                        pending: getPercOfValStr(absStats, absStats.pending, true),
+                        skipped: getPercOfValStr(absStats, absStats.skipped, true),
                         passedRaw: passedPerc
                     }
 
@@ -1354,6 +1390,18 @@ angular.module('svc.data', [])
                         params["target"] = _target
                         _initUrlParams = params
                     }
+                },
+                setJobsPerPage: function(jobsPerPage) {
+                    _jobsPerPage = jobsPerPage;
+                },
+                setJobsPage: function(jobsPage) {
+                    _jobsPage = jobsPage;
+                },
+                getJobsPerPage: function() {
+                    return _jobsPerPage;
+                },
+                getJobsPage: function() {
+                    return _jobsPage;
                 }
             }
 
@@ -1362,18 +1410,21 @@ angular.module('svc.data', [])
 
 
 // data helper methods
-function getPercOfVal(stats, val){
+function getPercOfVal(stats, val, includeSkipped){
     if (!stats){
         return 0;
     }
 
     var denom = stats.passed + stats.failed;
+    if (includeSkipped) {
+        denom += stats.skipped
+    }
     if(denom == 0){ return 0; }
-    return Math.floor(100*((val/denom).toFixed(2)));
+    return (100*(val/denom)).toFixed(1);
 }
 
-function getPercOfValStr(stats, val){
-    return wrapPercStr(getPercOfVal(stats, val))
+function getPercOfValStr(stats, val, includeSkipped){
+    return wrapPercStr(getPercOfVal(stats, val, includeSkipped))
 }
 
 function getItemPerc(stats){
@@ -1381,11 +1432,11 @@ function getItemPerc(stats){
         return 0;
     }
 
-    var total = stats.passed + stats.failed;
+    var total = stats.passed + stats.failed + stats.skipped;
     var denom = total + stats.pending;
     if(denom == 0){ return 0; }
 
-    return Math.floor(100*((total/denom).toFixed(2)));
+    return (100*(total/denom)).toFixed(1);
 }
 
 function getItemPercStr(stats){
@@ -1458,6 +1509,19 @@ angular.module('app.infobar', [])
 	  		}
 	  	}
   }])
+var jiraPrefixes = ["MB", "CBQE", "CBIT", "CBD", "CBSP"]
+
+formatClaim = function(claim) {
+    var claimHtml = claim
+    _.forEach(jiraPrefixes, function(prefix) {
+        if (claim.startsWith(prefix + "-")) {
+            claimHtml = '<a target="_blank" href="https://issues.couchbase.com/browse/' + claim + '">' + claim + '</a>'
+            return false;
+        }
+    })
+    return claimHtml
+}
+
 angular.module('app.main', [])
     .controller("NavCtrl", ['$scope', '$state', '$stateParams', 'Data', 'target', 'targetVersions', 'version',
         function($scope, $state, $stateParams, Data, target, targetVersions, version){
@@ -1515,8 +1579,8 @@ angular.module('app.main', [])
         }])
 
 
-    .controller('JobsCtrl', ['$scope', '$state', '$stateParams', 'Data', 'buildJobs',
-       function($scope, $state, $stateParams, Data, buildJobs){
+    .controller('JobsCtrl', ['$rootScope', '$scope', '$state', '$stateParams', 'Data', 'buildJobs', 'QueryService',
+       function($rootScope, $scope, $state, $stateParams, Data, buildJobs, QueryService){
 
             var CLAIM_MAP = {
                 "git error": ["hudson.plugins.git.GitException", "python3: can't open file 'testrunner.py': [Errno 2] No such file or directory"],
@@ -1536,52 +1600,96 @@ angular.module('app.main', [])
                 "No test report xml": ["No test report files were found. Configuration error?"]
             }
 
+            $scope.formatClaim = formatClaim
+
+            $scope.openClaims = new Set()
+            $scope.openClaim = function(jobName) {
+                $scope.openClaims.add(jobName);
+            }
+            $scope.closeClaim = function(jobName) {
+                $scope.openClaims.remove(jobName);
+            }
+
             function getClaimSummary(jobs) {
                 var claimCounts = {
                     "Analyzed": 0
                 }
                 var totalClaims = 0
                 _.forEach(Object.keys(CLAIM_MAP), function(claim) {
-                    claimCounts[claim] = 0;
+                    claimCounts[claim] = {
+                        jobCount: 0,
+                        skippedTestCount: 0,
+                        failedTestCount: 0
+                    };
                 })
                 var jiraCounts = {}
-                var jiraPrefixes = ["MB", "CBQE", "CBIT", "CBD"]
                 _.forEach(jiraPrefixes, function(prefix) {
                     jiraCounts[prefix] = 0;
                 })
+                var uniqueBugs = {}
+                _.forEach(jiraPrefixes, function(prefix) {
+                    uniqueBugs[prefix] = [];
+                })
                 _.forEach(jobs, function(job) {
-                    if (job["claim"] !== "" && !job["olderBuild"]) {
-                        var found = false
-                        _.forEach(Object.keys(claimCounts), function(claim) {
-                            if (job["claim"].startsWith(claim)) {
-                                claimCounts[claim] += 1;
-                                found = true
-                                return false;
-                            }
-                        })
-                        if (!found) {
-                            _.forEach(jiraPrefixes, function(prefix) {
-                                if (job["claim"].startsWith(prefix + "-")) {
-                                    if (claimCounts[job["claim"]]) {
-                                        claimCounts[job["claim"]] += 1;
+                    var foundInJob = [];
+                    _.forEach(job["bugs"], function(bug) {
+                        try {
+                            var prefix = bug.split("-")[0]
+                            if (jiraPrefixes.includes(prefix)) {
+                                if (!foundInJob.includes(bug)) {
+                                    if (claimCounts[bug]) {
+                                        claimCounts[bug].jobCount += 1;
+                                        claimCounts[bug].failedTestCount += job["failCount"]
+                                        claimCounts[bug].skippedTestCount += job["skipCount"]
                                     } else {
-                                        claimCounts[job["claim"]] = 1;
+                                        claimCounts[bug] = {
+                                            jobCount: 1,
+                                            failedTestCount: job["failCount"],
+                                            skippedTestCount: job["skipCount"]
+                                        }
                                     }
-                                    jiraCounts[prefix] += 1
-                                    found = true
+                                    jiraCounts[prefix] += 1;
+                                    foundInJob.push(bug);
+                                }
+                                if (!uniqueBugs[prefix].includes(bug)) {
+                                    uniqueBugs[prefix].push(bug)
+                                }
+                            }
+                            
+                        } catch (e) {
+                            console.error(e)
+                        }
+                    })
+                    _.forEach(job["claim"].split("<br><br>"), function(jobClaim) {
+                        if (jobClaim !== "" && !job["olderBuild"]) {
+                            _.forEach(Object.keys(claimCounts), function(claim) {
+                                if (jobClaim.startsWith(claim)) {
+                                    if (!foundInJob.includes(claim)) {
+                                        foundInJob.push(claim);
+                                        claimCounts[claim].jobCount += 1;
+                                        claimCounts[claim].failedTestCount += job["failCount"]
+                                        claimCounts[claim].skippedTestCount += job["skipCount"]
+                                    }
                                     return false;
                                 }
                             })
                         }
-                    }
+                    })
+                   
                 })
                 var claims = []
                 _.forEach(Object.entries(claimCounts), function(entry) {
-                    if (entry[1] > 0) {
-                        totalClaims += entry[1]
-                        claims.push({ claim: entry[0], count: entry[1] })
+                    var jobCount = entry[1].jobCount
+                    var failedTestCount = entry[1].failedTestCount
+                    var skippedTestCount = entry[1].skippedTestCount
+                    if (jobCount > 0) {
+                        totalClaims += jobCount
+                        claims.push({ claim: entry[0], skippedTestCount: skippedTestCount, failedTestCount: failedTestCount, jobCount: jobCount })
                     }
                 })
+                uniqueBugs["IT"] = uniqueBugs["CBD"].concat(uniqueBugs["CBIT"])
+                delete uniqueBugs["CBD"]
+                delete uniqueBugs["CBIT"]
                 jiraCounts["IT"] = jiraCounts["CBD"] + jiraCounts["CBIT"]
                 delete jiraCounts["CBD"]
                 delete jiraCounts["CBIT"]
@@ -1594,12 +1702,18 @@ angular.module('app.main', [])
                         name = "Test bugs (CBQE)"
                     } else if (prefix === "IT") {
                         name = "IT bugs (CBIT/CBD)"
+                    } else if (prefix === "CBSP") {
+                        name = "Support bugs (CBSP)"
                     }
                     return { 
                         name: name,
                         count: jiraCount[1],
-                        percent: totalClaims == 0 ? 0 : ((jiraCount[1]/totalClaims)*100).toFixed(0)
+                        percent: totalClaims == 0 ? 0 : ((jiraCount[1]/totalClaims)*100).toFixed(0),
+                        unique: uniqueBugs[prefix].length
                     }
+                })
+                .filter(function(jiraCount) {
+                    return jiraCount.count > 0;
                 })
                 $scope.claimSummary = claims;
                 $scope.totalClaims = totalClaims
@@ -1608,7 +1722,7 @@ angular.module('app.main', [])
             }
 
             $scope.jiraCounts = []
-            $scope.showAnalysis = true
+            $scope.showAnalysis = false
             $scope.changeShowAnalysis = function() {
                 $scope.showAnalysis = !$scope.showAnalysis
             }
@@ -1618,39 +1732,147 @@ angular.module('app.main', [])
             $scope.reverse = true
             $scope.activePanel = 0
 
+            function setJobsPerPage(jobsPerPage) {
+                if (jobsPerPage === "All") {
+                    jobsPerPage = $scope.panelTabs[$scope.activePanel].jobs.length;
+                }
+                $scope.jobsPerPage = jobsPerPage;
+                if ($scope.jobsPage > Math.max(0, $scope.numPages() - 1)) {
+                    Data.setJobsPage($scope.numPages() - 1);
+                }
+            }
+
+            $scope.targetBy = Data.getCurrentTarget();
+
+            $scope.jobsPerPage = Data.getJobsPerPage();
+            $scope.jobsPage = Data.getJobsPage();
+            $scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
+                $scope.jobsPage = jobsPage;
+            })
+            $scope.$watch(function() { return Data.getJobsPerPage() }, function(jobsPerPage) {
+                setJobsPerPage(jobsPerPage);
+            })
+
+            $scope.nextPage = function() {
+                if ($scope.nextPageExists()) {
+                    Data.setJobsPage($scope.jobsPage + 1);
+                }
+            }
+            $scope.prevPage = function() {
+                if ($scope.jobsPage > 0) {
+                    Data.setJobsPage($scope.jobsPage - 1);
+                }
+            }
+            $scope.nextPageExists = function() {
+                jobsLength = $scope.panelTabs[$scope.activePanel].jobs.length;
+                return ($scope.jobsPage + 1) * $scope.jobsPerPage < jobsLength - 1;
+            }
+            $scope.setPage = function () {
+                Data.setJobsPage(this.n);
+            };
+            $scope.numPages = function() {
+                jobsLength = $scope.panelTabs[$scope.activePanel].jobs.length;
+                if ($scope.jobsPerPage === 0) {
+                    return 0;
+                }
+                return Math.ceil(jobsLength / $scope.jobsPerPage);
+            }
+            $scope.pageNumbers = function() {
+                var start = $scope.jobsPage - 5;
+                if (start < 0) {
+                    start = 0;
+                }
+                var end = $scope.jobsPage + 5;
+                var numPages = $scope.numPages();
+                if (end > numPages) {
+                    end = numPages;
+                }
+                return _.range(start, end);
+            }
+            function resetPage() {
+                Data.setJobsPage(0);
+                if (Data.getJobsPerPage() === "All") {
+                    $scope.jobsPerPage = $scope.panelTabs[$scope.activePanel].jobs.length;
+                }
+            }
+
+            $scope.predicate = "name";
+            $scope.reverse = false;
             
 
                 $scope.onselect = 
-                    function(jobname,os,comp){
+                    function(jobname,os,comp,variants){
                         var activeJobs = Data.getActiveJobs()
+                        var target = Data.getCurrentTarget()
                         // activeJobs = _.reject(activeJobs, "olderBuild", true)
                         activeJobs = _.reject(activeJobs, "deleted", true)
                         
-                        var filters = {"name":jobname,"os":os,"component":comp}
-                        var requiredJobs = activeJobs
-                        _.forEach(filters, function(value, key) {
-                            requiredJobs = _.filter(requiredJobs, [key,value]);
-                        });
+                        var requiredJobs = activeJobs.filter(function(job) {
+                            return job.name === jobname && job.os === os && job.component === comp
+                        })
+
+                        $scope.model = {};
+                        $scope.model.bestRun = requiredJobs.find(function(job) { return job.olderBuild === false; }).build_id.toString();
+                        $scope.model.changeBestRun = function() {
+                            if ($scope.model.bestRun !== undefined) {
+                                _.forEach($scope.selectedjobdetails, function(job) {
+                                    if (job.build_id === parseInt($scope.model.bestRun)) {
+                                        job.olderBuild = false;
+                                    } else {
+                                        job.olderBuild = true;
+                                    }
+                                })
+                                var updatedJobs = Data.getActiveJobs();
+                                updateScopeWithJobs(updatedJobs, false);
+                                $rootScope.$broadcast("recalculateStats");
+                                QueryService.setBestRun(target, jobname, $scope.model.bestRun, os, comp, $scope.selectedbuild)
+                            }
+                        }
 
                             // requiredJobs = _.filter(activeJobs,["name",jobname,"os"])
                             $scope.len = requiredJobs.length
                             $scope.selectedjobdetails = requiredJobs
-                            $scope.selectedjobname = jobname
+                            $scope.selectedjobname = requiredJobs[0].displayName
                             $scope.selectedbuild = requiredJobs[0].build
                     }
                 
-            
+            $scope.search = ""
+            $scope.onSearchChange = function() {
+                jobs = Data.getActiveJobs()
+                updateScopeWithJobs(jobs)
+            }
+            $scope.searchClaim = function(claim) {
+                if ($scope.search === claim) {
+                    $scope.search = ""
+                } else {
+                    $scope.search = claim
+                }
+                $scope.onSearchChange()
+            }
 
-            function updateScopeWithJobs(jobs){
+            function updateScopeWithJobs(jobs, reset){
+                if (reset === undefined) {
+                    reset = true;
+                }
 
                 jobs = _.reject(jobs, "olderBuild", true)
                 jobs = _.reject(jobs, "deleted", true)
+                if ($scope.search !== "") {
+                    jobs = _.reject(jobs, function(job) { 
+                        return !(job.bugs.includes($scope.search) ||
+                                job.claim.includes($scope.search) ||
+                                job.name.includes($scope.search) || 
+                                job.triage.includes($scope.search)) 
+                    })
+                }
                 var jobsCompleted = _.uniq(_.reject(jobs, ["result", "PENDING"]))
                 var jobsSuccess = _.uniq(_.filter(jobs, ["result", "SUCCESS"]))
                 var jobsAborted = _.uniq(_.filter(jobs, ["result", "ABORTED"]))
                 var jobsUnstable = _.uniq(_.filter(jobs, ["result", "UNSTABLE"]))
+                var jobsInstallFailed = _.uniq(_.filter(jobs, ["result", "INST_FAIL"]))
                 var jobsFailed = _.uniq(_.filter(jobs, ["result", "FAILURE"]))
                 var jobsPending = _.uniq(_.filter(jobs, ["result", "PENDING"]))
+                var jobsSkip = _.uniq(_.filter(jobs, function(job) { return job["skipCount"] > 0 }))
                 
 
                 $scope.panelTabs = [
@@ -1659,10 +1881,38 @@ angular.module('app.main', [])
                     {title: "Jobs Aborted", jobs: jobsAborted},
                     {title: "Jobs Unstable", jobs: jobsUnstable},
                     {title: "Jobs Failed", jobs: jobsFailed},
-                    {title: "Jobs Pending", jobs: jobsPending}
+                    {title: "Jobs Install Failed", jobs: jobsInstallFailed},
+                    {title: "Jobs Skipped", jobs: jobsSkip},
+                    {title: "Jobs Pending", jobs: jobsPending},
                 ]                
 
+                $scope.variantNames = []
+                _.forEach(jobs, function(job) {
+                    if (job.variants) {
+                        _.forEach(job.variants, function(_, variant) {
+                            if (!$scope.variantNames.includes(variant)) {
+                                $scope.variantNames.push(variant)
+                            }
+                        })
+                    }
+                })
+                // sort variant names, ignore case
+                $scope.variantNames.sort(function(a, b) { 
+                    var ia = a.toLowerCase();
+                    var ib = b.toLowerCase();
+                    return ia < ib ? -1 : ia > ib ? 1 : 0;
+                })
+
+                $scope.variantName = function(name) {
+                    return name.split("_").map(function(part) {
+                        return part[0].toUpperCase() + part.slice(1)
+                    }).join(" ")
+                }
+
                 getClaimSummary(jobs)
+                if (reset) {
+                    resetPage();
+                }
             }
 
             function getJobs() {
@@ -1766,20 +2016,60 @@ angular.module('app.main', [])
                 .map(function(k){
                     return {key: k, disabled: false}
                 })
-            var allVersions = _.uniq(_.map(buildJobs, "server_version"))
+            var allVersions = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.server_version !== undefined }), "server_version"))
                 .map(function (k) {
-                    return k ? {key: k, disabled: false}: null
+                    return {key: k, disabled: false}
                 })
+            var allDapi = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.dapi !== undefined }), "dapi"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var allNebula = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.dni !== undefined }), "dni"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var allEnv = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.env !== undefined }), "env"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var sidebarItems = {platforms: allPlatforms, features: allFeatures, serverVersions: allVersions, dapiVersions: allDapi, nebulaVersions: allNebula, envVersions: allEnv }
+            var allVariants = []
 
-            Data.setSideBarItems({platforms: allPlatforms, features: allFeatures, serverVersions: allVersions});
+            _.forEach(jobs, function(job) {
+                if (job.variants) {
+                    _.forEach(Object.keys(job.variants), function(variant) {
+                        if (!allVariants.includes(variant)) {
+                            allVariants.push(variant)
+                        }
+                    })
+                }
+            })
+
+            _.forEach(allVariants, function(variant) {
+                sidebarItems[variant] = _.uniq(_.map(_.filter(jobs, function(job) { return job.variants && job.variants[variant] !== undefined }), "variants."+variant))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            })
+
+            Data.setSideBarItems(sidebarItems);
 
 
 
             $scope.changePanelJobs = function(i){
                 $scope.activePanel = i
+                resetPage();
             }
 
             $scope.msToTime = msToTime
+            $scope.msToDate = msToDate
+            $scope.timestampToDate = function(timestmap) {
+                if (timestmap) {
+                    return new Date(timestmap).toLocaleString()
+                } else {
+                    return ""
+                }
+            }
             $scope.$watch(function(){ return Data.getActiveJobs() },
                 function(activeJobs){
                     if(activeJobs){
@@ -1792,8 +2082,10 @@ angular.module('app.main', [])
     .controller('JobDetailsCtrl',['$scope','$state','$stateParams','Data','target',
                 function($scope,$state,$stateParams,Data,target){
                     
+                    $scope.openClaims = []
                     
                     $scope.msToTime = msToTime
+                    $scope.msToDate = msToDate
                     var jobname = $stateParams.jobName
                     
                     $scope.$watch(function(){
@@ -1812,6 +2104,29 @@ angular.module('app.main', [])
                     )
 
     }])
+    .directive("claimTest", [function() {
+        return {
+            scope: {claim: "="},
+            templateUrl: "partials/claim.html",
+            link: function(scope) {
+                var jobName = scope.$parent.job.name;
+                scope.formatClaim = formatClaim
+                var linesToShow = 50;
+                scope.shortClaim = (scope.claim.length < linesToShow) ? scope.claim : scope.claim.split('<br><br>')[0].slice(0, linesToShow) + '...'
+                scope.scope = {
+                    showFullClaim: scope.$parent.$parent.openClaims.has(jobName),
+                    changeShowFullClaim: function() {
+                        if (this.showFullClaim) {
+                            scope.$parent.$parent.openClaims.delete(jobName)
+                        } else {
+                            scope.$parent.$parent.openClaims.add(jobName)
+                        }
+                        this.showFullClaim = !this.showFullClaim
+                    }
+                }
+            }
+        }
+    }])
 
     .directive('claimCell', ['Data', 'QueryService', function(Data, QueryService){
         return {
@@ -1819,67 +2134,171 @@ angular.module('app.main', [])
             scope: {job: "="},
             templateUrl: 'partials/claimcell.html',
             link: function(scope, elem, attrs){
-
-                if(scope.job.customClaim){  // override claim
-                    scope.job.claim = scope.job.customClaim
+                scope.editClaim = false;
+                scope.scope = {
+                    bugsText: scope.job.bugs.join(", "),
+                    saveClaim: function() {
+                        var bugs = this.bugsText
+                        var validBugs = true;
+                        if (bugs === "") {
+                            bugs = []
+                        } else {
+                           bugs = bugs.split(",").map(function (bug) { return bug.trim() })
+                           _.forEach(bugs, function(bug) {
+                                console.log(bug)
+                                var validBug = false;
+                                _.forEach(jiraPrefixes, function(prefix) {
+                                    if (bug.startsWith(prefix + "-") && !isNaN(bug.split("-")[1])) {
+                                        validBug = true;
+                                    }
+                                })
+                                if (!validBug) {
+                                    validBugs = false;
+                                    return false;
+                                }
+                            })
+                        }
+                        if (validBugs) {
+                            scope.job.bugs = bugs
+                            var target = Data.getCurrentTarget()
+                            var name = scope.job.name
+                            var build_id = scope.job.build_id
+                            var bugs = scope.job.bugs
+                            var os = scope.job.os
+                            var comp = scope.job.component
+                            var version = scope.job.build
+                            QueryService.claimJob("bugs", target, name, build_id, bugs, os, comp, version)
+                                .catch(function(err){
+                                    alert("error saving claim: "+err.err)
+                                }).then(function() {
+                                    scope.editClaim = false;
+                                })
+                        } else {
+                            alert("Invalid bugs list, must be " + jiraPrefixes.join(", "))
+                        }
+                    }
                 }
+                scope.formatBugs = function() {
+                    return scope.job.bugs.map(function(bug) {
+                        return '<a target="_blank" href="https://issues.couchbase.com/browse/' + bug + '">' + bug + '</a>'
+                    }).join(", ")
+                }
+            }
+        }
+    }])
 
-                var oldClaim = ""
-                
-                $(elem).mouseover(function(){
-                    if(scope.job.claim != ""){
-                        oldClaim = scope.job.claim
-                    }
-                    else{
-                        oldClaim = "No Claim for this build"
-                    }
-                    $('[data-toggle="popover"]').popover({
-                        placement : 'top',
-                        trigger : 'hover',
-                        content : scope.job.claim
-                    });
-                
-                });
-                // publish on blur
-                scope.editClaim = false
-                scope.saveClaim = function(){
-                    // publish
+    .directive('triageCell', ['Data', 'QueryService', function(Data, QueryService){
+        return {
+            restrict: 'E',
+            scope: {job: "="},
+            templateUrl: 'partials/triagecell.html',
+            link: function(scope, elem, attrs){
+                scope.editClaim = false;
+                scope.saveClaim = function() {
                     var target = Data.getCurrentTarget()
                     var name = scope.job.name
                     var build_id = scope.job.build_id
-                    var claim = scope.job.claim
+                    var triage = scope.job.triage
                     var os = scope.job.os
                     var comp = scope.job.component
                     var version = scope.job.build
-                    QueryService.claimJob(target, name, build_id, claim,os,comp,version)
+                    QueryService.claimJob("triage", target, name, build_id, triage, os, comp, version)
                         .catch(function(err){
-                            scope.job.claim = "error saving claim: "+err.err
+                            alert("error saving claim: "+err.err)
+                        }).then(function() {
+                            scope.editClaim = false;
                         })
-                    scope.updateClaim()
-                    scope.editClaim = false
                 }
-                scope.showFullClaim = false
-                scope.changeShowFullClaim = function() {
-                    scope.showFullClaim = !scope.showFullClaim
-                    scope.updateClaim()
+
+            }
+        }
+    }])
+    .directive('pagination', ['Data', function(Data) {
+        return {
+            restrict: 'E',
+            scope: {},
+            templateUrl: 'partials/pagination.html',
+            link: function(scope, element, attrs) {
+                scope.jobsPage = Data.getJobsPage();
+                scope.nextPageExists = scope.$parent.nextPageExists;
+                scope.pageNumbers = scope.$parent.pageNumbers;
+                scope.nextPage = scope.$parent.nextPage;
+                scope.prevPage = scope.$parent.prevPage;
+                scope.setPage = scope.$parent.setPage;
+                scope.jobsPerPageChoices = [20, 50, 100, 500, 1000, 'All'];
+                scope.jobsPerPage = Data.getJobsPerPage();
+
+                scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
+                    scope.jobsPage = jobsPage;
+                })
+
+                scope.$watch(function() { return Data.getJobsPerPage() }, function(jobsPerPage) {
+                    scope.jobsPerPage = jobsPerPage;
+                })
+
+                scope.onJobsPerPageChange = function() {
+                    Data.setJobsPerPage(scope.jobsPerPage);
                 }
-                scope.updateClaim = function() {
-                    scope.claim = (scope.showFullClaim || scope.job.claim.length < 100) ? scope.job.claim : scope.job.claim.split('<br><br>')[0].slice(0, 100) + '...'
+
+            }
+        }
+
+    }])
+    .directive('rerunButton', ['QueryService', function(QueryService){
+        return {
+            restrict: 'E',
+            scope: {job: "="},
+            templateUrl: 'partials/rerun_button.html',
+            link: function(scope, elem, attrs){
+                scope.submitting = false;
+                scope.error = false;
+                scope.dispatched = false;
+                scope.rerunJob = function() {
+                    if (!confirm("Rerun " + scope.job.name + "?")) {
+                        return;
+                    }
+                    scope.error = false;
+                    scope.submitting = true;
+                    scope.dispatched = false;
+                    QueryService.rerunJob(scope.job.url + scope.job.build_id, null)
+                        .then(function() {
+                            scope.submitting = false;
+                            scope.dispatched = true;
+                        })
+                        .catch(function(e) {
+                            scope.submitting = false;
+                            scope.error = true;
+                            if (e.data.err) {
+                                alert(e.data.err);
+                            }
+                        })
                 }
-                scope.updateClaim()
+                scope.btnText = function() {
+                    if (scope.error) {
+                        return "Error dispatching";
+                    }
+                    if (scope.submitting) {
+                        return "Dispatching...";
+                    }
+                    if (scope.dispatched) {
+                        return "Dispatched";
+                    }
+                    return "Rerun";
+                }
             }
         }
     }])
 
 
 
-
 // https://coderwall.com/p/wkdefg/converting-milliseconds-to-hh-mm-ss-mmm
 function msToTime(duration) {
-    var milliseconds = parseInt((duration%1000)/100)
-        , seconds = parseInt((duration/1000)%60)
-        , minutes = parseInt((duration/(1000*60))%60)
-        , hours = parseInt((duration/(1000*60*60))%24);
+    var milliseconds = duration % 1000;
+    duration = (duration - milliseconds) / 1000;
+    var seconds = duration % 60;
+    duration = (duration - seconds) / 60;
+    var minutes = duration % 60;
+    var hours = (duration - minutes) / 60;
 
     hours = (hours < 10) ? "0" + hours : hours;
     minutes = (minutes < 10) ? "0" + minutes : minutes;
@@ -1888,6 +2307,13 @@ function msToTime(duration) {
     return hours + ":" + minutes + ":" + seconds;
 }
 
+
+function msToDate(duration) {
+    var obj = new Date(duration);
+    var time = obj.getUTCHours() + ":" + obj.getUTCMinutes();
+    var date = obj.getDate() + "/" + (obj.getMonth() + 1) + "/" + obj.getFullYear();
+    return date + " - " + time;
+}
 
 angular.module('svc.query', [])
 	.service("QueryService",['$http', 'Data',
@@ -1921,9 +2347,9 @@ angular.module('svc.query', [])
                                return response.data
                         })
 			},
-			claimJob: function(target, name, build_id, claim,os,comp,build){
+			claimJob: function(type, target, name, build_id, claim, os, comp, build){
 				var url = ["claim", target, name, build_id].join("/")
-				return $http.post(url, {claim: claim,os:os,comp:comp,build:build})
+				return $http.post(url, {type: type, claim: claim, os: os, comp: comp, build: build})
 			},
 			getBuildSummary: function (buildId) {
 				var url = ["getBuildSummary", buildId].join("/")
@@ -1931,6 +2357,13 @@ angular.module('svc.query', [])
 					.then(function (response) {
 						return response.data
                     })
+			},
+			setBestRun: function(target, name, build_id, os, comp, build) {
+				var url = ["setBestRun", target, name, build_id].join("/")
+				return $http.post(url, {os:os,comp:comp,build:build})
+			},
+			rerunJob: function(jobUrl, cherryPick) {
+				return $http.post("rerunJob", { cherryPick: cherryPick, jobUrl: jobUrl })
 			}
 		  }
 		}])
@@ -1945,27 +2378,21 @@ angular.module('app.sidebar', [])
 	  		link: function(scope, elem, attrs){
 
 	  		  scope.showPerc = false
-	  		  scope.disablePlatforms = false
-	  		  scope.disableFeatures = false
-			  scope.disabledServerVersions = false
+			  scope.disabled = {}
+
               scope.buildVersion = Data.getBuild()
 			  scope.targetBy = Data.getCurrentTarget()
 
 	  		  scope.toggleAll = function(type){
-	  		  	var isDisabled;
-	  		  	
-	  		  	if(type=="platforms"){
-	  		  		isDisabled = !scope.disablePlatforms
-		  		  	scope.disablePlatforms = isDisabled
-				 } else if(type=="features"){
-					isDisabled = !scope.disableFeatures
-					scope.disableFeatures = isDisabled
-		  		 } else if(type=="serverVersions"){
-					isDisabled = !scope.disabledServerVersions
-					scope.disabledServerVersions = isDisabled
-				}
+	  		  	var isDisabled = !scope.disabled[type];
+				scope.disabled[type] = isDisabled
 	  		  	Data.toggleAllSidebarItems(type, isDisabled)
 	  		  }
+			  scope.variantName = function(name) {
+				return name.split("_").map(function(part) {
+					return part[0].toUpperCase() + part.slice(1)
+				}).join(" ")
+			  }
 			  
 			  // Detect when build has changed
 			  scope.$watch(function(){ return Data.getSideBarItems() }, 
@@ -1976,22 +2403,37 @@ angular.module('app.sidebar', [])
 					// only update sidebar items on build change
 					// if(items.buildVersion != last.buildVersion){
 						scope.buildVersion = items.buildVersion
-					    scope.sidebarItems = {
-					        platforms: _.map(items["platforms"], "key"),
-							features: _.map(items["features"], "key"),
-							serverVersions: _.map(items["serverVersions"], "key")
-						}
+					    scope.sidebarItems = {}
+						_.forEach(items, function(values, name) {
+							if (name === "buildVersion") {
+								return;
+							}
+							scope.sidebarItems[name] = _.map(values, "key")
+							if (scope.disabled[name] === undefined) {
+								scope.disabled[name] = false
+							}
+						})
+						// variants are any filters that are not the default
+						// sort variant names, ignore case
+						scope.sidebarItemsVariants = Object.keys(scope.sidebarItems).filter(function(item) {
+							return !["platforms", "features", "serverVersions", "dapiVersions", "nebulaVersions", "envVersions"].includes(item);
+						}).sort(function(a, b) { 
+							var ia = a.toLowerCase();
+							var ib = b.toLowerCase();
+							return ia < ib ? -1 : ia > ib ? 1 : 0;
+						})
 						
 					// }
 
 					// if all sidebar items of a type selected
 					// enable all checkmark
-					var noPlatformsDisabled = !_.some(_.map(items["platforms"], "disabled"))
-					var noFeaturesDisabled = !_.some(_.map(items["features"], "disabled"))
-					var noServerVersionsDisabled = !_.some(_.map(items["serverVersions"], "disabled"))
-					scope.disablePlatforms = !noPlatformsDisabled
-					scope.disableFeatures = !noFeaturesDisabled
-					scope.disabledServerVersions = !noServerVersionsDisabled
+					_.forEach(items, function(values, name) {
+						if (name === "buildVersion") {
+							return;
+						}
+						noDisabled = !_.some(_.map(values, "disabled"))
+						scope.disabled[name] = !noDisabled
+					})
 
 				}, true)
 
@@ -2013,7 +2455,8 @@ angular.module('app.sidebar', [])
   			//TODO: allow modify by location url
 
   			scope.disabled = false
-  			scope.stats = Data.getItemStats(scope.key, scope.type)
+			scope.stats = Data.getItemStats(scope.key, scope.type)
+			scope.showDashboardUrls = Data.getCurrentTarget() === "server" && Data.getSelectedVersion() === "7.0.0"
 
   			scope.getRunPercent = function(){
   				if(!scope.disabled){
@@ -2022,6 +2465,9 @@ angular.module('app.sidebar', [])
 			  }
 			  
 			scope.getDashboardUrl = function() {
+				if (!scope.showDashboardUrls) {
+					return null;
+				}
 				var dashboardMap = {
 					'2I_MOI': 'ovawbLBGk',
 					'2I_REBALANCE': 'Yr2QbLBMz',
@@ -2123,6 +2569,11 @@ angular.module('app.sidebar', [])
 			  	// update item stats
                 scope.stats = Data.getItemStats(scope.key, scope.type)
 			}, true)
+
+			scope.$on('recalculateStats', function() {
+				// update item stats e.g. when updating best run
+                scope.stats = Data.getItemStats(scope.key, scope.type);
+			})
 
   		}
   	}
@@ -2300,10 +2751,10 @@ angular.module('app.target', [])
         }])
 
 
-    .factory('ViewTargets', ['COUCHBASE_TARGET', 'SDK_TARGET', 'SG_TARGET', 'CBLITE_TARGET', 'CBO_TARGET',
-  	function (COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET){
+    .factory('ViewTargets', ['COUCHBASE_TARGET', 'SDK_TARGET', 'SG_TARGET', 'CBLITE_TARGET', 'CBO_TARGET','CAPELLA_TARGET','SERVERLESS_TARGET',
+  	function (COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET, CAPELLA_TARGET, SERVERLESS_TARGET){
 
-      var viewTargets = [COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET]
+      var viewTargets = [COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET, CAPELLA_TARGET, SERVERLESS_TARGET]
       var targetMap = {} // reverse lookup map
 
       // allow reverse lookup by bucket
@@ -2317,7 +2768,7 @@ angular.module('app.target', [])
             allTargets: function(){
             	return viewTargets
             },
-            getTarget: function(target){3
+            getTarget: function(target){
             	return targetMap[target]
             }
         }
@@ -2358,6 +2809,21 @@ angular.module('app.target', [])
          "key": "abspassed",
          "value": 0,
          "options": [0, 50, 100, 500]
-  });
+  })
+  .value('CAPELLA_TARGET', {
+         "title": "Capella",
+         "bucket": "capella",
+         "key": "abspassed",
+         "value": 0,
+         "options": [0, 50, 100, 500]
+  })
+  .value('SERVERLESS_TARGET', {
+        "title": "Serverless",
+        "bucket": "serverless",
+        "key": "abspassed",
+        "value": 0,
+        "options": [0, 50, 100, 500]
+  })
+;
 
 

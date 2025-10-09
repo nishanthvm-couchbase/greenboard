@@ -1,3 +1,4 @@
+
 var config = require('./config.js')
     , couchbase = require('couchbase')
     , Promise = require('promise');
@@ -131,7 +132,7 @@ module.exports = function () {
             })
         });
       }
-    
+
     function _get(bucket, documentId) {
         var db = bucketConnections[bucket];
         if (!db.connected){
@@ -197,7 +198,7 @@ module.exports = function () {
                     })
                 return qp
             }
-            
+
             if (bucket in versionsResponseCache) {
                 var data = versionsResponseCache[bucket]
                 if (data.length == 0) {
@@ -267,7 +268,51 @@ module.exports = function () {
                 return _getmulti('greenboard', [doc_id,existing_builds_id]).then(function (result) {
                     console.log(result)
                     var job = result[doc_id].value
+                    // Handle case where Couchbase returns Buffer for large documents
+                    if (Buffer.isBuffer(job)) {
+                        console.log("Converting Buffer to JSON for job document")
+                        let jobString = job.toString()
+
+                        // Clean the string by removing null bytes and control characters
+                        const originalLength = jobString.length
+                        jobString = jobString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+                        if (originalLength !== jobString.length) {
+                            console.log("Cleaned", originalLength - jobString.length, "control characters from JSON")
+                        }
+
+                        try {
+                            console.log("Buffer size:", job.length, "String length:", jobString.length)
+                            console.log("First 100 chars:", jobString.substring(0, 100))
+                            console.log("Last 100 chars:", jobString.substring(jobString.length - 100))
+                            job = JSON.parse(jobString)
+                        } catch (parseError) {
+                            console.log("Failed to parse job JSON:", parseError.message)
+                            const errorPos = parseError.message.match(/position (\d+)/)?.[1]
+                            console.log("Error at position:", errorPos)
+                            if (errorPos) {
+                                const pos = parseInt(errorPos)
+                                const start = Math.max(0, pos - 50)
+                                const end = Math.min(jobString.length, pos + 50)
+                                console.log("Context around error position:")
+                                console.log("Before:", JSON.stringify(jobString.substring(start, pos)))
+                                console.log("At pos:", JSON.stringify(jobString.charAt(pos)), "charCode:", jobString.charCodeAt(pos))
+                                console.log("After:", JSON.stringify(jobString.substring(pos + 1, end)))
+                            }
+                            throw new Error("Invalid job document data")
+                        }
+                    }
                     var allJobs = result[existing_builds_id].value
+                    if (Buffer.isBuffer(allJobs)) {
+                        console.log("Converting Buffer to JSON for allJobs document")
+                        try {
+                            const allJobsString = allJobs.toString()
+                            console.log("AllJobs Buffer size:", allJobs.length, "String length:", allJobsString.length)
+                            allJobs = JSON.parse(allJobsString)
+                        } catch (parseError) {
+                            console.log("Failed to parse allJobs JSON:", parseError.message)
+                            throw new Error("Invalid allJobs document data")
+                        }
+                    }
                     var processedJobs =  processJob(job, allJobs, build)
                     buildsResponseCache[build] = processedJobs
                     return processedJobs
@@ -287,6 +332,14 @@ module.exports = function () {
                 var existingJobs
                 var version = buildId.split('-')[0]
 
+                console.log("=== JOB OBJECT DEBUG ===")
+                console.log("jobs type:", typeof jobs)
+                console.log("jobs isBuffer:", Buffer.isBuffer(jobs))
+                console.log("jobs keys:", Object.keys(jobs))
+                console.log("jobs['os'] exists:", 'os' in jobs)
+                console.log("jobs['os'] type:", typeof jobs['os'])
+                console.log("jobs['os'] value:", jobs['os'])
+                console.log("========================")
                 console.log(jobs)
 
                 existingJobs = allJobs[bucket]
@@ -294,12 +347,13 @@ module.exports = function () {
                 _.forEach(existingJobs, function (components, os) {
                     _.forEach(components, function (jobNames, component) {
                         _.forEach(jobNames, function (name, job) {
-                            if (!_.has(jobs['os'], os)){
-                                jobs['os'][os] = {};
-                            }
-                            if (!_.has(jobs['os'][os], component)){
-                                jobs['os'][os][component] = {};
-                            }
+                            try {
+                                if (!_.has(jobs['os'], os)){
+                                    jobs['os'][os] = {};
+                                }
+                                if (!_.has(jobs['os'][os], component)){
+                                    jobs['os'][os][component] = {};
+                                }
 
                             // pending if job with name or display name doesn't exist
                             const isPending = jobs['os'][os][component][job] === undefined && Object.values(jobs['os'][os][component]).find(runs => runs[0].displayName === job) === undefined
@@ -329,8 +383,11 @@ module.exports = function () {
                                 }
                                 jobs['os'][os][component][job] = [pendJob]
                                 countt = countt+1
-                                
+
                                 }
+                            } catch (error) {
+                                // console.log("Skipping problematic entry for os:", os, "component:", component, "job:", job, "error:", error.message);
+                            }
                         })
                     })
                 })
@@ -475,7 +532,7 @@ module.exports = function () {
                         d.triage = claim
                     }
                 }
-                newbuildjobs.push(d)    
+                newbuildjobs.push(d)
             })
             jobs["os"][os][comp][name] = newbuildjobs
             console.log(jobs["os"][os][comp][name])
@@ -721,7 +778,7 @@ module.exports = function () {
             }
 
             const dispatcherParams = JSON.parse(parameters.dispatcher_params.slice(11));
-            
+
             // TODO: Remove when CBQE-6336 fixed
             if (!dispatcherParams.component) {
                 throw Error("Invalid dispatcher params")
@@ -744,9 +801,9 @@ module.exports = function () {
             dispatcherParams.serverPoolId = dispatcherParams.serverPoolId.split(",")[0];
 
             await jenkins.job.build({ name: dispatcherName, parameters: dispatcherParams });
-            
+
         }
-        
+
     };
 
     return API
@@ -770,3 +827,4 @@ function getParameters(info) {
 
 // number of jobs per os
 // SELECT os,component, COUNT(*) as count fromserver GROUP BY os;
+

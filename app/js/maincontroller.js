@@ -358,6 +358,7 @@ angular.module('app.main', [])
                 var jobsSuccess = _.uniq(_.filter(jobs, ["result", "SUCCESS"]))
                 var jobsAborted = _.uniq(_.filter(jobs, ["result", "ABORTED"]))
                 var jobsUnstable = _.uniq(_.filter(jobs, ["result", "UNSTABLE"]))
+                var jobsInstallFailed = _.uniq(_.filter(jobs, ["result", "INST_FAIL"]))
                 var jobsFailed = _.uniq(_.filter(jobs, ["result", "FAILURE"]))
                 var jobsPending = _.uniq(_.filter(jobs, ["result", "PENDING"]))
                 var jobsSkip = _.uniq(_.filter(jobs, function(job) { return job["skipCount"] > 0 }))
@@ -369,6 +370,7 @@ angular.module('app.main', [])
                     {title: "Jobs Aborted", jobs: jobsAborted},
                     {title: "Jobs Unstable", jobs: jobsUnstable},
                     {title: "Jobs Failed", jobs: jobsFailed},
+                    {title: "Jobs Install Failed", jobs: jobsInstallFailed},
                     {title: "Jobs Skipped", jobs: jobsSkip},
                     {title: "Jobs Pending", jobs: jobsPending},
                 ]                
@@ -740,7 +742,19 @@ angular.module('app.main', [])
                 scope.submitting = false;
                 scope.error = false;
                 scope.dispatched = false;
+                
+                // Check if rerun should be disabled based on run count
+                scope.isRerunDisabled = function() {
+                    return scope.job.runCount && scope.job.runCount > 3;
+                };
+                
                 scope.rerunJob = function() {
+                    // Prevent rerun if disabled due to run count
+                    if (scope.isRerunDisabled()) {
+                        alert("Rerun disabled: Job has more than 3 runs (" + scope.job.runCount + " runs)");
+                        return;
+                    }
+                    
                     if (!confirm("Rerun " + scope.job.name + "?")) {
                         return;
                     }
@@ -761,6 +775,9 @@ angular.module('app.main', [])
                         })
                 }
                 scope.btnText = function() {
+                    if (scope.isRerunDisabled()) {
+                        return "Max runs reached";
+                    }
                     if (scope.error) {
                         return "Error dispatching";
                     }

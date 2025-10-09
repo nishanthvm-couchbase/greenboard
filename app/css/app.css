@@ -206,6 +206,12 @@ body {
   font-size: 16px;
 }
 
+.INST_FAIL{
+  color: #FF9800;
+  font-weight: bold;
+  font-size: 16px;
+}
+
 .PENDING{
   color: #aaa;
   font-weight: bold;
