@@ -71,7 +71,7 @@ angular.module('app.sidebar', [])
 	  	}
   }])
 
-  .directive('sidebarItem', ['Data', function(Data){
+  .directive('sidebarItem', ['Data', '$rootScope', function(Data, $rootScope){
   	return {
   		restrict: 'E',
   		scope: {
@@ -87,6 +87,14 @@ angular.module('app.sidebar', [])
   			scope.disabled = false
 			scope.stats = Data.getItemStats(scope.key, scope.type)
 			scope.showDashboardUrls = Data.getCurrentTarget() === "server" && Data.getSelectedVersion() === "7.0.0"
+			
+			scope.openAIReport = function(event) {
+				event.stopPropagation();
+				var build = Data.getBuild(); // Get current build (e.g., "8.1.0-1228")
+				var component = scope.key; // Component name (e.g., "BACKUP_RECOVERY")
+				// Build version is already in the format we need (e.g., "8.1.0-1228")
+				$rootScope.$broadcast('openAIReport', { version: build, component: component });
+			}
 
   			scope.getRunPercent = function(){
   				if(!scope.disabled){
@@ -94,29 +102,38 @@ angular.module('app.sidebar', [])
 	  			}
 			  }
 			  
+			scope.getRunPercentNum = function(){
+				if(!scope.disabled && scope.stats && scope.stats.percStats){
+					var runPerc = scope.stats.percStats.run;
+					if(!runPerc) return 0;
+					if(typeof runPerc === 'string'){
+						var num = parseFloat(runPerc.replace('%', '').replace(/\s/g, ''));
+						return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+					}
+					var num = parseFloat(runPerc);
+					return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+				}
+				return 0;
+			}
+			  
 			scope.getDashboardUrl = function() {
 				if (!scope.showDashboardUrls) {
 					return null;
 				}
 				var dashboardMap = {
 					'2I_MOI': 'ovawbLBGk',
-					'2I_REBALANCE': 'Yr2QbLBMz',
 					ANALYTICS: 'Qb8QbYfGz',
-					AUTO_FAILOVER: 'mO6lbYBGz',
 					BACKUP_RECOVERY: 'Dv_QxLfGz',
 					BUILD_SANITY: 'IPm-bSLMk',
 					CE_ONLY: '80ZuxLBGk',
 					CLI: 'U6gubLfMz',
 					COLLECTIONS: 'BGtwbLfMk',
-					COMPRESSION: 'RQX_bYfMz',
 					DURABILITY: 'qH5QbYBMz',
 					EP: 'aTj_xYBGk',
-					EPHEMERAL: 'feYwbLBMk',
 					EVENTING: 'k2QQbLfMk',
 					FTS: 'pBAwxLfGk',
 					GEO: 'Dn4ubYfGz',
 					GOXDCR: 'h1JQbLfGz',
-					IMPORT_EXPORT: 'kf9lbLBGk',
 					IPV6: 'K_rQxLBGz',
 					LOG_REDACTION: 'Cv7XxYfMz',
 					MAGMA: '09PQxLBMz',
@@ -124,13 +141,10 @@ angular.module('app.sidebar', [])
 					MOBILE_CONVERGENCE: 'LyywbLfGk',
 					NSERV: 'iUowxYfGz',
 					OS_CERTIFY: 'Od2-6tfMk',
-					PLASMA: 'qiLwbLfGk',
 					QUERY: 'C2dQxYBMk',
-					RBAC: 'KGXQbYBMz',
 					RQG: 'tnfwbYBMk',
 					RZA: 'iRIubYBMz',
 					SANITY: 'tGRa6tBMk',
-					SDK: 'Bdq_bLBGz',
 					SECURITY: 'SpxQxYfGk',
 					SUBDOC: 'feuQbYBGz',
 					TUNABLE: '_LmXxYBMk',

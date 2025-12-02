@@ -1,9 +1,12 @@
-exports.Cluster = '172.23.121.84'
+exports.Cluster = '172.23.219.72'
 exports.RBACUser = "Administrator";
-exports.RBACKPassword = "password";
+exports.RBACKPassword = "esabhcuoc";
 exports.DefaultBucket = 'test_eventing'
 exports.AuthPassword = ''
 // exports.Buckets = ['server', 'sdk', 'mobile']
 exports.Buckets = []
 exports.httpListen = '127.0.0.1'
-exports.httpPort = 8205
+exports.httpPort = 80
+exports.httpsPort = 443
+exports.Certificate = '/Users/nishanth.vm/Documents/gb_upgrade/try/greenboard/certs/ano.pem'
+exports.PrivateKey = '/Users/nishanth.vm/Documents/gb_upgrade/try/greenboard/certs/key.pem'

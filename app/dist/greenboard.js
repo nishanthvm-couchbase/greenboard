@@ -1,3 +1,69 @@
+angular.module('app.aireport', [])
+  .controller('AIReportCtrl', ['$scope', '$rootScope', 'QueryService', function($scope, $rootScope, QueryService) {
+    $scope.showModal = false;
+    $scope.loading = false;
+    $scope.report = null;
+    $scope.error = null;
+    $scope.version = null;
+    $scope.component = null;
+
+    $rootScope.$on('openAIReport', function(event, data) {
+      $scope.version = data.version;
+      $scope.component = data.component;
+      $scope.showModal = true;
+      $scope.loading = true;
+      $scope.report = null;
+      $scope.error = null;
+
+      QueryService.getReport(data.version, data.component)
+        .then(function(report) {
+          $scope.loading = false;
+          if (report) {
+            $scope.report = report;
+          } else {
+            $scope.error = 'Report not generated yet';
+          }
+        })
+        .catch(function(err) {
+          $scope.loading = false;
+          $scope.error = 'Failed to load report: ' + (err.data && err.data.error ? err.data.error : 'Unknown error');
+        });
+    });
+
+    $scope.closeModal = function() {
+      $scope.showModal = false;
+      $scope.report = null;
+      $scope.error = null;
+    };
+
+    // Close on escape key
+    $scope.$on('$destroy', function() {
+      $(document).off('keydown.aireport');
+    });
+
+    $scope.$watch('showModal', function(newVal) {
+      if (newVal) {
+        $(document).on('keydown.aireport', function(e) {
+          if (e.keyCode === 27) { // ESC key
+            $scope.$apply(function() {
+              $scope.closeModal();
+            });
+          }
+        });
+      } else {
+        $(document).off('keydown.aireport');
+      }
+    });
+  }])
+  .directive('aiReportModal', function() {
+    return {
+      restrict: 'E',
+      controller: 'AIReportCtrl',
+      templateUrl: 'partials/ai_report_modal.html'
+    };
+  });
+
+
 'usev strict'
 
 var app = angular.module('greenBoard', [
@@ -11,7 +77,9 @@ var app = angular.module('greenBoard', [
     'app.target',
     'app.sidebar',
     'app.infobar',
-    'app.compare'
+    'app.compare',
+    'app.darkmode',
+    'app.aireport'
 ]);
 
 app.run(['$location', '$rootScope', 'Data', function($location, $rootScope, Data){
@@ -37,7 +105,7 @@ app.config(['$stateProvider', '$urlRouterProvider',
     function($stateProvider, $urlRouterProvider){
 
         // TODO: external bootstrap with now testing build!
-        $urlRouterProvider.otherwise("/server/7.0.0/latest");
+        $urlRouterProvider.otherwise("/server/8.1.0/latest");
         $stateProvider              
             .state('target', {
                 url: "/:target",
@@ -649,6 +717,290 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
 
     }]);
 
+/**
+ * Compatibility wrapper for d3-tip 0.9.1 to work with d3 v3.5.17
+ * This creates a polyfill for d3-selection and d3-collection modules
+ * and exposes d3.tip() function compatible with d3 v3
+ */
+
+(function() {
+  'use strict';
+
+  // Polyfill d3-selection module for d3 v3
+  if (typeof d3 !== 'undefined') {
+    // Create d3-selection compatibility
+    var d3Selection = {
+      selection: d3.selection,
+      select: d3.select,
+      selectAll: d3.selectAll
+    };
+
+    // Create d3-collection compatibility  
+    var d3Collection = {
+      map: function(obj) {
+        var map = {};
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            map[key] = obj[key];
+          }
+        }
+        return {
+          keys: function() {
+            return Object.keys(map);
+          },
+          get: function(key) {
+            return map[key];
+          }
+        };
+      }
+    };
+
+    // Store original d3.tip if it exists
+    var originalD3Tip = d3.tip;
+
+    // Load and execute d3-tip code with polyfills
+    // We'll create a simple d3.tip implementation compatible with d3 v3
+    d3.tip = function() {
+      var direction = function() { return 'n'; };
+      var offset = function() { return [0, 0]; };
+      var html = function() { return ' '; };
+      var rootElement = document.body;
+      var node = null;
+      var svg = null;
+      var point = null;
+      var target = null;
+
+      function initNode() {
+        var div = d3.select(document.createElement('div'));
+        div
+          .style('position', 'absolute')
+          .style('top', 0)
+          .style('opacity', 0)
+          .style('pointer-events', 'none')
+          .style('box-sizing', 'border-box');
+        return div.node();
+      }
+
+      function getNodeEl() {
+        if (node == null) {
+          node = initNode();
+          rootElement.appendChild(node);
+        }
+        return d3.select(node);
+      }
+
+      function getSVGNode(element) {
+        var svgNode = element.node();
+        if (!svgNode) return null;
+        if (svgNode.tagName.toLowerCase() === 'svg') return svgNode;
+        return svgNode.ownerSVGElement;
+      }
+
+      function getScreenBBox(targetShape) {
+        var targetel = target || targetShape;
+        while (targetel.getScreenCTM == null && targetel.parentNode != null) {
+          targetel = targetel.parentNode;
+        }
+
+        var bbox = {};
+        var matrix = targetel.getScreenCTM();
+        var tbbox = targetel.getBBox();
+        var width = tbbox.width;
+        var height = tbbox.height;
+        var x = tbbox.x;
+        var y = tbbox.y;
+
+        point.x = x;
+        point.y = y;
+        bbox.nw = point.matrixTransform(matrix);
+        point.x += width;
+        bbox.ne = point.matrixTransform(matrix);
+        point.y += height;
+        bbox.se = point.matrixTransform(matrix);
+        point.x -= width;
+        bbox.sw = point.matrixTransform(matrix);
+        point.y -= height / 2;
+        bbox.w = point.matrixTransform(matrix);
+        point.x += width;
+        bbox.e = point.matrixTransform(matrix);
+        point.x -= width / 2;
+        point.y -= height / 2;
+        bbox.n = point.matrixTransform(matrix);
+        point.y += height;
+        bbox.s = point.matrixTransform(matrix);
+
+        return bbox;
+      }
+
+      function functor(v) {
+        return typeof v === 'function' ? v : function() {
+          return v;
+        };
+      }
+
+      var directionCallbacks = {
+        n: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.n.y - getNodeEl().node().offsetHeight,
+            left: bbox.n.x - getNodeEl().node().offsetWidth / 2
+          };
+        },
+        s: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.s.y,
+            left: bbox.s.x - getNodeEl().node().offsetWidth / 2
+          };
+        },
+        e: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.e.y - getNodeEl().node().offsetHeight / 2,
+            left: bbox.e.x
+          };
+        },
+        w: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.w.y - getNodeEl().node().offsetHeight / 2,
+            left: bbox.w.x - getNodeEl().node().offsetWidth
+          };
+        },
+        nw: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.nw.y - getNodeEl().node().offsetHeight,
+            left: bbox.nw.x - getNodeEl().node().offsetWidth
+          };
+        },
+        ne: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.ne.y - getNodeEl().node().offsetHeight,
+            left: bbox.ne.x
+          };
+        },
+        sw: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.sw.y,
+            left: bbox.sw.x - getNodeEl().node().offsetWidth
+          };
+        },
+        se: function() {
+          var bbox = getScreenBBox(this);
+          return {
+            top: bbox.se.y,
+            left: bbox.se.x
+          };
+        }
+      };
+
+      function tip(vis) {
+        svg = getSVGNode(vis);
+        if (!svg) return;
+        point = svg.createSVGPoint();
+        rootElement.appendChild(getNodeEl().node());
+      }
+
+      tip.show = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var targetElement = this instanceof SVGElement ? this : null;
+        if (args.length > 0 && args[args.length - 1] instanceof SVGElement) {
+          targetElement = args.pop();
+        }
+        if (targetElement) {
+          target = targetElement;
+        }
+
+        var content = html.apply(targetElement || this, args);
+        var poffset = offset.apply(targetElement || this, args);
+        var dir = direction.apply(targetElement || this, args);
+        var nodel = getNodeEl();
+        var coords;
+        var scrollTop = document.documentElement.scrollTop || rootElement.scrollTop;
+        var scrollLeft = document.documentElement.scrollLeft || rootElement.scrollLeft;
+
+        nodel.html(content)
+          .style('opacity', 1)
+          .style('pointer-events', 'all');
+
+        // Remove all direction classes first
+        ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'].forEach(function(d) {
+          nodel.classed(d, false);
+        });
+
+        coords = directionCallbacks[dir].apply(targetElement || this);
+        nodel.classed(dir, true)
+          .style('top', (coords.top + poffset[0]) + scrollTop + 'px')
+          .style('left', (coords.left + poffset[1]) + scrollLeft + 'px');
+
+        return tip;
+      };
+
+      tip.hide = function() {
+        var nodel = getNodeEl();
+        nodel.style('opacity', 0).style('pointer-events', 'none');
+        return tip;
+      };
+
+      tip.attr = function(n, v) {
+        if (arguments.length < 2 && typeof n === 'string') {
+          return getNodeEl().attr(n);
+        }
+        var args = Array.prototype.slice.call(arguments);
+        d3.selection.prototype.attr.apply(getNodeEl(), args);
+        return tip;
+      };
+
+      tip.style = function(n, v) {
+        if (arguments.length < 2 && typeof n === 'string') {
+          return getNodeEl().style(n);
+        }
+        var args = Array.prototype.slice.call(arguments);
+        d3.selection.prototype.style.apply(getNodeEl(), args);
+        return tip;
+      };
+
+      tip.direction = function(v) {
+        if (!arguments.length) return direction;
+        direction = v == null ? v : functor(v);
+        return tip;
+      };
+
+      tip.offset = function(v) {
+        if (!arguments.length) return offset;
+        offset = v == null ? v : functor(v);
+        return tip;
+      };
+
+      tip.html = function(v) {
+        if (!arguments.length) return html;
+        html = v == null ? v : functor(v);
+        return tip;
+      };
+
+      tip.rootElement = function(v) {
+        if (!arguments.length) return rootElement;
+        rootElement = v == null ? v : functor(v);
+        return tip;
+      };
+
+      tip.destroy = function() {
+        if (node) {
+          getNodeEl().remove();
+          node = null;
+        }
+        return tip;
+      };
+
+      return tip;
+    };
+  }
+})();
+
+
 (function(){
     'use strict';
     angular.module('svc.timeline', [])
@@ -715,19 +1067,22 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
               var build
               var _clickBuildCallback;
               var _domId;
-              var svg, layer, rect, yScale
+              var svg, layer, rect, yScale, xScale, hoverLine, hoverCircle
 
               var margin = {top: 40, right: 10, bottom: 100, left: 70},
                   width = 800 - margin.left - margin.right,
                   height = 300 - margin.top - margin.bottom;
-              var color = ['rgba(59, 201, 59, 0.5)', 'rgba(222, 0, 0, 0.5)']
+              var color = ['rgba(59, 201, 59, 0.7)', 'rgba(222, 0, 0, 0.7)']
               var color_selected = ['rgba(59, 201, 59, 1)', 'rgba(222, 0, 0, 1)']
+              var color_stroke = ['rgba(59, 201, 59, 1)', 'rgba(222, 0, 0, 1)']
+              var hoveredIndex = null
 
               function getYMax(layers){
                 return d3.max(layers, function(layer) { return d3.max(layer, function(d) { return d.y0 + d.y; }); });
               }
 
               function getXScale(xLabels){
+                // Use ordinal scale with rangeRoundBands for bar chart
                 return d3.scale.ordinal()
                           .domain(xLabels)
                           .rangeRoundBands([0, width], .08)
@@ -762,10 +1117,16 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                 var yaxis = d3.svg.axis()
                         .scale(yScale)
                         .tickSize(0)
-                        .tickPadding(6)
+                        .tickPadding(8)
                         .orient("left")
-                          .tickSize(-width, 0, 0)
-                          //.tickFormat("")
+                        .tickSize(-width, 0, 0)
+                        .tickFormat(function(d) {
+                          // Format numbers with k for thousands
+                          if (d >= 1000) {
+                            return (d / 1000).toFixed(d % 1000 === 0 ? 0 : 1) + 'k';
+                          }
+                          return d;
+                        })
                 var tickValues = d3.range(yStackMax)
                 if(yStackMax > 50){
                   while (tickValues.length >= 10){
@@ -819,6 +1180,15 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                         .style("fill", function(d, i, l) { 
                           return d.x == build ? color_selected[l] : color[l]
                         })
+                        .style("stroke", function(d, i, l) {
+                          return d.x == build ? color_stroke[l] : "rgba(255,255,255,0.4)"
+                        })
+                        .style("stroke-width", 1.5)
+                        .style("cursor", "pointer")
+                        .style("opacity", 0.85)
+                        .attr("class", "bar-segment")
+                        .attr("rx", 2) // Slight rounded corners
+                        .attr("ry", 2)
 
                       // fade out on remove
                       rect.exit().transition()
@@ -832,6 +1202,8 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                 // animate showing of rect bars via y-axis
                 rect.transition()
                   .delay(function(d, i) { return i * 10; })
+                  .duration(600)
+                  .ease("cubic-out")
                   .attr("y", function(d) { return y(d.y0 + d.y); })
                   .attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); });               
               }
@@ -844,63 +1216,187 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                       .html(htmlFun)
               }
 
-              function configureToolTips(svg, layers, rect){
-                // add tool tip to svg 
-                var printData = function(d, i) {return d;}
-                var tip1 = initToolTip('e', 0, 10, printData, 'd3-tip-pass'),
-                    tip2 = initToolTip('e', 0, 10, printData, 'd3-tip-fail'),
-                    tip3 = initToolTip('n',-10,0, printData)
 
-                svg.call(tip1); svg.call(tip2); svg.call(tip3)
+              function createHoverElements(svg){
+                // Create hover line and circle for better UX
+                hoverLine = svg.append("line")
+                  .attr("class", "hover-line")
+                  .attr("y1", 0)
+                  .attr("y2", height)
+                  .style("stroke", "#666")
+                  .style("stroke-width", 2)
+                  .style("stroke-dasharray", "3,3")
+                  .style("opacity", 0)
+                  .style("pointer-events", "none")
+                
+                hoverCircle = svg.append("g")
+                  .attr("class", "hover-circles")
+                  .style("opacity", 0)
+                  .style("pointer-events", "none")
+                
+                hoverCircle.append("circle")
+                  .attr("class", "hover-circle-pass")
+                  .attr("r", 5)
+                  .style("fill", color[0])
+                  .style("stroke", "#fff")
+                  .style("stroke-width", 2)
+                
+                hoverCircle.append("circle")
+                  .attr("class", "hover-circle-fail")
+                  .attr("r", 5)
+                  .style("fill", color[1])
+                  .style("stroke", "#fff")
+                  .style("stroke-width", 2)
+              }
 
-                // bar callbacks
+              function configureToolTips(svg, layers, rect, builds){
+                // Unified tooltip showing all information together
+                var unifiedTip = initToolTip('n', -10, 0, function(d) {
+                  if (!d || !d.x) return '';
+                  var buildData = builds.find(function(b) { return b.build === d.x; });
+                  if (!buildData) return '';
+                  var total = buildData.Passed + buildData.Failed;
+                  var passPct = total > 0 ? ((buildData.Passed / total) * 100).toFixed(1) : 0;
+                  var failPct = total > 0 ? ((buildData.Failed / total) * 100).toFixed(1) : 0;
+                  return '<div style="text-align: left; min-width: 180px;">' +
+                    '<div style="margin-bottom: 8px;">' +
+                    '<strong style="font-size: 14px;">' + d.x + '</strong><br/>' +
+                    '<span style="font-size: 12px; opacity: 0.9;">Total: ' + total.toLocaleString() + '</span>' +
+                    '</div>' +
+                    '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+                    '<div class="d3-tip-pass" style="flex: 1; padding: 6px 10px; border-radius: 4px; background: rgba(59, 201, 59, 0.95); color: #ffffff; font-weight: 600; text-align: center;">' +
+                    '<div style="font-size: 11px; margin-bottom: 2px;">Passed</div>' +
+                    '<div style="font-size: 13px;">' + buildData.Passed.toLocaleString() + '</div>' +
+                    '<div style="font-size: 10px; opacity: 0.9;">(' + passPct + '%)</div>' +
+                    '</div>' +
+                    '<div class="d3-tip-fail" style="flex: 1; padding: 6px 10px; border-radius: 4px; background: rgba(222, 0, 0, 0.95); color: #ffffff; font-weight: 600; text-align: center;">' +
+                    '<div style="font-size: 11px; margin-bottom: 2px;">Failed</div>' +
+                    '<div style="font-size: 13px;">' + buildData.Failed.toLocaleString() + '</div>' +
+                    '<div style="font-size: 10px; opacity: 0.9;">(' + failPct + '%)</div>' +
+                    '</div>' +
+                    '</div>' +
+                    '</div>';
+                }, 'd3-tip')
+
+                svg.call(unifiedTip)
+
+                // bar callbacks with pop-up effect - entire bar pops up together
                 rect.on("mouseover", function(d, i){
-                  // show tip on pass and fail layer
-                  tip1.show(layers[0][i].y, i, rect[0][i])
-                  tip2.show(layers[1][i].y, i, rect[1][i])
-                  tip3.show(d.x, rect[1][i])
+                  var buildName = d.x;
+                  var currentBar = d3.select(this);
+                  
+                  // Find all segments belonging to the same build (both green and red)
+                  var allSegments = rect.filter(function(segmentData) {
+                    return segmentData.x === buildName;
+                  });
+                  
+                  // Apply pop-up effect to all segments of the same bar
+                  allSegments.each(function() {
+                    var segment = d3.select(this);
+                    var segmentX = parseFloat(segment.attr("x")) + parseFloat(segment.attr("width")) / 2;
+                    var segmentY = parseFloat(segment.attr("y")) + parseFloat(segment.attr("height")) / 2;
+                    
+                    segment
+                      .transition()
+                      .duration(150)
+                      .attr("transform", "translate(" + segmentX + "," + segmentY + ") scale(1.05) translate(" + (-segmentX) + "," + (-segmentY) + ")")
+                      .style("opacity", 1)
+                      .style("filter", "drop-shadow(0 0 6px rgba(0,0,0,0.3))");
+                  });
+                  
+                  // Show unified tip
+                  unifiedTip.show(d, rect[1][i])
                 })
                 rect.on("mouseout", function(d, i){
-                  // show tip on pass and fail layer
-                  tip1.hide(); tip2.hide(); tip3.hide();
+                  var buildName = d.x;
+                  
+                  // Find all segments belonging to the same build (both green and red)
+                  var allSegments = rect.filter(function(segmentData) {
+                    return segmentData.x === buildName;
+                  });
+                  
+                  // Reset pop-up effect for all segments of the same bar
+                  allSegments.each(function() {
+                    d3.select(this)
+                      .transition()
+                      .duration(150)
+                      .attr("transform", "scale(1)")
+                      .style("opacity", 0.8)
+                      .style("filter", "none");
+                  });
+                  
+                  // Hide tip
+                  unifiedTip.hide();
                 })
               }
 
-              function configureBarClickCallback(rect, clickCallBack){
-                // when bar is clicked
+              function configureBarClickCallback(rect, clickCallBack, layers){
+                // when bar is clicked - both green and red should navigate to same build
                 rect.on("click", function(d, i_clicked){
+                  // d.x is the build name, i_clicked is the segment index (0=pass, 1=fail)
+                  // Find the build index from the data
+                  var buildName = d.x;
+                  var buildIndex = -1;
+                  
+                  // Find which build this belongs to by checking the first layer
+                  if (layers && layers[0]) {
+                    for (var i = 0; i < layers[0].length; i++) {
+                      if (layers[0][i].x === buildName) {
+                        buildIndex = i;
+                        break;
+                      }
+                    }
+                  }
 
-                  // highlight the selected build
+                  // highlight the selected build - highlight both segments of the same build
                   rect.style("fill", function(d, i, l){
-                      return i==i_clicked ? color_selected[l] : color[l]
+                      // Check if this segment belongs to the clicked build
+                      var isClickedBuild = d.x === buildName;
+                      return isClickedBuild ? color_selected[l] : color[l]
+                    })
+                    .style("stroke", function(d, i, l){
+                      var isClickedBuild = d.x === buildName;
+                      return isClickedBuild ? color_stroke[l] : "rgba(255,255,255,0.4)"
                     })
 
-                  // and notify consumer of click callback
-                  var build = d.x
-                  clickCallBack(build)
+                  // and notify consumer of click callback with the build name
+                  clickCallBack(buildName)
                 })
               }
 
               function renderSvgXAxis(svg, xAxis){
 
-                // render the xAxis along graph
+                // render the xAxis along graph with enhanced styling
                 svg.append("g")
                     .attr("class", "x axis")
                     .attr("transform", "translate(0," + height + ")")
                     .call(xAxis)
                     .selectAll("text") 
                       .style("text-anchor", "end")
+                      .style("font-size", "13px")
+                      .style("font-weight", "600")
+                      .style("fill", "#444")
                       .attr("dx", "-.8em")
                       .attr("dy", ".15em")
                       .attr("transform", "rotate(-65)" )
               }
               function renderSvgYAxis(svg, yAxis){
 
-                // render the xAxis along graph
+                // render the yAxis along graph with enhanced styling
                 svg.append("g")
-                    .attr("class", "y axis")
+                    .attr("class", "y axis grid")
                     .attr("transform", "translate(0,0)")
                     .call(yAxis)
+                    .selectAll("text")
+                      .style("font-size", "14px")
+                      .style("font-weight", "600")
+                      .style("fill", "#444")
+                
+                // Add grid lines
+                svg.append("g")
+                    .attr("class", "grid")
+                    .attr("transform", "translate(0,0)")
+                    .call(yAxis.tickSize(-width, 0, 0).tickFormat(""))
               }
 
               function setHighlightedBuild(buildNames){
@@ -911,38 +1407,54 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                 }
               }
               function _render(builds){
+                    if (!builds || builds.length === 0) return;
 
                     var stack = d3.layout.stack()
                     var xLabels = _.map(builds, 'build')
                     var passFailLayers = ['Passed', 'Failed'].map(function(k){
-                      return builds.map(function(b, i){ return {x: xLabels[i], y: b[k] }})
+                      return builds.map(function(b, i){ return {x: xLabels[i], y: b[k] || 0} })
                     })
                     var layers = stack(passFailLayers)
                     var yStackMax = getYMax(layers)
+                    
                     // convert scales to  d3 axis
-                    var xScale = getXScale(xLabels) 
+                    xScale = getXScale(xLabels) 
                     var xAxis = getXAxis(xScale)
                     yScale = getYScale(yStackMax)
                     var yAxis = getYAxis(yScale, yStackMax)
 
-                    // identify build to highlight before rendering bars
+                    // identify build to highlight before rendering
                     setHighlightedBuild(xLabels)
+
+
+                    // Remove old elements
+                    svg.selectAll(".layer").remove()
+                    svg.selectAll(".hover-line").remove()
+                    svg.selectAll(".hover-circles").remove()
 
                     layer = appendLayersToSvg(svg, layers)
                     rect = appendRectToLayers(xScale, layer)
                     animateRectBarHeight(yScale, rect)
 
-
                     // configure toolTips behavior
-                    configureToolTips(svg, layers, rect)
+                    configureToolTips(svg, layers, rect, builds)
 
-                    // configure barClick behavior
-                    configureBarClickCallback(rect, _clickBuildCallback)
+                    // configure barClick behavior - pass layers so we can identify builds
+                    configureBarClickCallback(rect, _clickBuildCallback, layers)
 
                     // renders x-axis along timeline
                     renderSvgXAxis(svg, xAxis)
                     renderSvgYAxis(svg, yAxis)
 
+                    // Update selected build highlight
+                    if (build && rect) {
+                      rect.style("fill", function(d, i, l) {
+                        return d.x == build ? color_selected[l] : color[l];
+                      })
+                      .style("stroke", function(d, i, l) {
+                        return d.x == build ? color_stroke[l] : "rgba(255,255,255,0.3)";
+                      });
+                    }
               }
               return {
 
@@ -964,10 +1476,13 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                 update: function(builds){
 
                     // fade timeline
-                    rect.transition()
-                      .delay(100)
-                      .attr("y", function(d) { return yScale(d.y0); })
-                      .attr("height", 0);
+                    if (rect) {
+                      rect.transition()
+                        .delay(100)
+                        .duration(200)
+                        .attr("y", function(d) { return yScale(d.y0); })
+                        .attr("height", 0);
+                    }
 
                     // fade out xaxis ticks
                     svg.selectAll('.tick text')
@@ -980,7 +1495,7 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                         svg.select(".x").remove()
                         svg.select(".y").remove()
                         // remove bars from dom
-                        layer.remove()
+                        if (layer) layer.remove()
                         // re-render timeline
                         _render(builds)
                     }, 250)
@@ -991,6 +1506,72 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
               }
         }])
 })();
+
+angular.module('app.darkmode', [])
+  .service('DarkMode', [function() {
+    var isDarkMode = false;
+    
+    // Load preference from localStorage
+    var savedPreference = localStorage.getItem('greenboardDarkMode');
+    if (savedPreference !== null) {
+      isDarkMode = savedPreference === 'true';
+    }
+    
+    var service = {
+      isDarkMode: function() {
+        return isDarkMode;
+      },
+      toggle: function() {
+        isDarkMode = !isDarkMode;
+        localStorage.setItem('greenboardDarkMode', isDarkMode);
+        this.apply();
+        return isDarkMode;
+      },
+      apply: function() {
+        var body = document.body;
+        if (isDarkMode) {
+          body.classList.add('dark-mode');
+        } else {
+          body.classList.remove('dark-mode');
+        }
+      }
+    };
+    
+    // Apply initial state
+    service.apply();
+    
+    return service;
+  }])
+  .directive('darkModeToggle', ['DarkMode', function(DarkMode) {
+    return {
+      restrict: 'E',
+      template: '<div class="theme-toggle-wrapper">' +
+                '<span class="theme-toggle-text">Try dark mode <span class="theme-toggle-arrows"><span>></span><span>></span><span>></span></span></span>' +
+                '<div class="theme-toggle-container" ng-click="toggleDarkMode($event)" title="Toggle Dark Mode">' +
+                '<label class="theme-toggle-label" ng-class="{\'dark-active\': isDark}">' +
+                '<i class="fas fa-moon"></i>' +
+                '<i class="fas fa-sun"></i>' +
+                '<span class="theme-toggle-ball"></span>' +
+                '</label>' +
+                '</div>' +
+                '</div>',
+      link: function(scope, element, attrs) {
+        scope.isDark = DarkMode.isDarkMode();
+        
+        // Apply initial state
+        DarkMode.apply();
+        
+        scope.toggleDarkMode = function($event) {
+          if ($event) {
+            $event.preventDefault();
+            $event.stopPropagation();
+          }
+          scope.isDark = DarkMode.toggle();
+        };
+      }
+    };
+  }]);
+
 
 angular.module('svc.data', [])
     .value("DEFAULT_FILTER_BY", 2000)
@@ -1007,11 +1588,21 @@ angular.module('svc.data', [])
             _targetVersions = {}
             _buildJobs = []
             _buildJobsActive = []
-            _sideBarItems = []
+            _sideBarItems = {}
             _filterBy = DEFAULT_FILTER_BY
             _buildsFilterBy = DEFAULT_BUILDS_FILTER_BY
             _initUrlParams = null
             _buildInfo = {}
+            _jobsPage = 0;
+            _jobsPerPage = 20;
+            _availableFilters = {
+                features: "component",
+                platforms: "os",
+                serverVersions: "server_version",
+                dapiVersions: "dapi",
+                nebulaVersions: "dni",
+                envVersions: "env"
+            }
 
             function updateLocationUrl(type, key, disabled){
                 var typeArgs = $location.search()[type]
@@ -1055,12 +1646,12 @@ angular.module('svc.data', [])
 
             function disableItem(key, type){
 
-                var jobtype = type == "platforms" ? "os" : "component"
-                jobtype = type == "serverVersions" ? "server_version" : jobtype
+
+                var jobtype = _availableFilters[type]
 
                 // diabling item: remove from active list of build jobs
                 _buildJobsActive = _.reject(_buildJobsActive, function(job){
-                    return job[jobtype] == key
+                    return job[jobtype] == key || job.variants && job.variants[jobtype] === key
                 })
                 updateSidebarItemState(type, key, true)
 
@@ -1068,26 +1659,31 @@ angular.module('svc.data', [])
 
             function enableItem(key, type){
 
-                var jobtype = type == "platforms" ? "os" : "component"
-                jobtype = type == "serverVersions" ? "server_version" : jobtype
+                
+                var jobtype = _availableFilters[type]
 
                 // enabling item so include in active list of build jobs
                 var includeJobs = _.filter(_buildJobs, function(job){
 
                     // detect if job matches included key
-                    if(job[jobtype] == key){
-
-                        // get alternate of current type..
-                        // ie... so if we are adding back an os key
-                        // then get the component listed for this job
-                        var altTypes = jobtype == "os" ? ["features", "component", "serverVersions"] : ["platforms", "os", "server_version"]
-                        var sideBarItem = _.find(_sideBarItems[altTypes[0]], {"key":job[altTypes[1]]})
-
+                    // show jobs not matching variant if all variants selected
+                    if(job[jobtype] == key || (job.variants && job.variants[jobtype] === key)){
+                        // filter out jobs if it matches another filter that is disabled
+                        for (var map_key in _availableFilters) {
+                            if (type === map_key) {
+                                continue
+                            }
+                            var map_value = _availableFilters[map_key]
+                            var sideBarItem = _sideBarItems[map_key].find(function(item) {
+                                return item.key === job[map_value] || (job.variants && job.variants[map_value] === item.key);
+                            })
+                            if (sideBarItem && sideBarItem.disabled) {
+                                return false
+                            }
+                        }
                         // only include this job if it's alternate type isn't disabled
                         // ie.. do not add back goxdcr if os is centos and centos is disabled
-                        if (!sideBarItem.disabled){
-                            return true
-                        }
+                        return true
                     }
                 })
                 _buildJobsActive = _buildJobsActive.concat(includeJobs)
@@ -1221,6 +1817,21 @@ angular.module('svc.data', [])
                 },
                 setSideBarItems: function(items){
                     _sideBarItems = items
+
+                    for (var item in items) {
+                        if (!_availableFilters[item]) {
+                            _availableFilters[item] = item
+                        }
+                    }
+
+                    // remove any filters that no longer apply (e.g. after switching builds)
+                    _.forEach(_availableFilters, function(_, filterName) {
+                        if (!_sideBarItems[filterName]) {
+                            delete _availableFilters[filterName]
+                        }
+
+                    })
+
                     _sideBarItems['buildVersion'] = buildNameWithVersion()
 
                     // default behavior is to initialize sideBarItems
@@ -1243,7 +1854,7 @@ angular.module('svc.data', [])
                         // only enable urlParams
                         _.mapKeys(_initUrlParams, function(values, type){
 
-                            if(["platforms", "features", "serverVersions"].indexOf(type) != -1){
+                            if(Object.keys(_availableFilters).indexOf(type) != -1){
                                 var keys = values.split(",")
                                 keys.forEach(function(k){
                                     enableItem(k, type)
@@ -1264,22 +1875,22 @@ angular.module('svc.data', [])
                     // enabled build jobs
 
                     // filter out just jobs with this key
-                    var jobtype = type == "platforms" ? "os" : "component"
-                    jobtype = type == "serverVersions" ? "server_version" : jobtype
+                    var jobtype = _availableFilters[type]
                     var subset = _buildJobsActive
                     if (type != "build"){
                         subset = _.filter(_buildJobsActive, function(job){
-                            return job[jobtype] == key
+                            // include in stat if jobtype matches, jobtype is a variant and no variants or jobtype is a variant and variant matches
+                            return job[jobtype] == key || (!job[jobtype] && !job.variants) || (job.variants && job.variants[jobtype] == key)
                         })
                     }
-		    subset = _.reject(subset, "olderBuild", true)
+		            subset = _.reject(subset, "olderBuild", true)
                     subset = _.reject(subset, "deleted", true)
-                    subset = _.uniqBy(subset, "name")
 
                     // calculate absolute stats
                     var absTotal = _.sum(_.map(_.uniq(subset), "totalCount"))
                     var absFail = _.sum(_.map(_.uniq(subset), "failCount"))
                     var absPending = _.sum(_.map(_.uniq(subset), "pending"))
+                    var absSkip = _.sum(_.map(_.uniq(subset), "skipCount"))
                     if (!absTotal){
                         absTotal = 0;
                     }
@@ -1289,19 +1900,25 @@ angular.module('svc.data', [])
                     if (!absPending){
                         absPending = 0;
                     }
+                    if (!absSkip){
+                        absSkip = 0;
+                    }
                     var absStats = {
-                        passed: absTotal-absFail,
+                        passed: absTotal-absFail-absSkip,
                         failed: absFail,
-                        pending: absPending
+                        pending: absPending,
+                        skipped: absSkip,
+                        total: absTotal+absPending
                     }
 
                     // calculate percentage based stats
-                    var passedPerc = getPercOfVal(absStats, absStats.passed)
+                    var passedPerc = getPercOfVal(absStats, absStats.passed, false)
                     var percStats = {
                         run: getItemPercStr(absStats),
                         passed: wrapPercStr(passedPerc),
-                        failed: getPercOfValStr(absStats, absStats.failed),
-                        pending: getPercOfValStr(absStats, absStats.pending),
+                        failed: getPercOfValStr(absStats, absStats.failed, false),
+                        pending: getPercOfValStr(absStats, absStats.pending, true),
+                        skipped: getPercOfValStr(absStats, absStats.skipped, true),
                         passedRaw: passedPerc
                     }
 
@@ -1354,6 +1971,18 @@ angular.module('svc.data', [])
                         params["target"] = _target
                         _initUrlParams = params
                     }
+                },
+                setJobsPerPage: function(jobsPerPage) {
+                    _jobsPerPage = jobsPerPage;
+                },
+                setJobsPage: function(jobsPage) {
+                    _jobsPage = jobsPage;
+                },
+                getJobsPerPage: function() {
+                    return _jobsPerPage;
+                },
+                getJobsPage: function() {
+                    return _jobsPage;
                 }
             }
 
@@ -1362,18 +1991,21 @@ angular.module('svc.data', [])
 
 
 // data helper methods
-function getPercOfVal(stats, val){
+function getPercOfVal(stats, val, includeSkipped){
     if (!stats){
         return 0;
     }
 
     var denom = stats.passed + stats.failed;
+    if (includeSkipped) {
+        denom += stats.skipped
+    }
     if(denom == 0){ return 0; }
-    return Math.floor(100*((val/denom).toFixed(2)));
+    return (100*(val/denom)).toFixed(1);
 }
 
-function getPercOfValStr(stats, val){
-    return wrapPercStr(getPercOfVal(stats, val))
+function getPercOfValStr(stats, val, includeSkipped){
+    return wrapPercStr(getPercOfVal(stats, val, includeSkipped))
 }
 
 function getItemPerc(stats){
@@ -1381,11 +2013,11 @@ function getItemPerc(stats){
         return 0;
     }
 
-    var total = stats.passed + stats.failed;
+    var total = stats.passed + stats.failed + stats.skipped;
     var denom = total + stats.pending;
     if(denom == 0){ return 0; }
 
-    return Math.floor(100*((total/denom).toFixed(2)));
+    return (100*(total/denom)).toFixed(1);
 }
 
 function getItemPercStr(stats){
@@ -1458,6 +2090,19 @@ angular.module('app.infobar', [])
 	  		}
 	  	}
   }])
+var jiraPrefixes = ["MB", "CBQE", "CBIT", "CBD", "CBSP"]
+
+formatClaim = function(claim) {
+    var claimHtml = claim
+    _.forEach(jiraPrefixes, function(prefix) {
+        if (claim.startsWith(prefix + "-")) {
+            claimHtml = '<a target="_blank" href="https://issues.couchbase.com/browse/' + claim + '">' + claim + '</a>'
+            return false;
+        }
+    })
+    return claimHtml
+}
+
 angular.module('app.main', [])
     .controller("NavCtrl", ['$scope', '$state', '$stateParams', 'Data', 'target', 'targetVersions', 'version',
         function($scope, $state, $stateParams, Data, target, targetVersions, version){
@@ -1515,8 +2160,8 @@ angular.module('app.main', [])
         }])
 
 
-    .controller('JobsCtrl', ['$scope', '$state', '$stateParams', 'Data', 'buildJobs',
-       function($scope, $state, $stateParams, Data, buildJobs){
+    .controller('JobsCtrl', ['$rootScope', '$scope', '$state', '$stateParams', 'Data', 'buildJobs', 'QueryService',
+       function($rootScope, $scope, $state, $stateParams, Data, buildJobs, QueryService){
 
             var CLAIM_MAP = {
                 "git error": ["hudson.plugins.git.GitException", "python3: can't open file 'testrunner.py': [Errno 2] No such file or directory"],
@@ -1536,52 +2181,96 @@ angular.module('app.main', [])
                 "No test report xml": ["No test report files were found. Configuration error?"]
             }
 
+            $scope.formatClaim = formatClaim
+
+            $scope.openClaims = new Set()
+            $scope.openClaim = function(jobName) {
+                $scope.openClaims.add(jobName);
+            }
+            $scope.closeClaim = function(jobName) {
+                $scope.openClaims.remove(jobName);
+            }
+
             function getClaimSummary(jobs) {
                 var claimCounts = {
                     "Analyzed": 0
                 }
                 var totalClaims = 0
                 _.forEach(Object.keys(CLAIM_MAP), function(claim) {
-                    claimCounts[claim] = 0;
+                    claimCounts[claim] = {
+                        jobCount: 0,
+                        skippedTestCount: 0,
+                        failedTestCount: 0
+                    };
                 })
                 var jiraCounts = {}
-                var jiraPrefixes = ["MB", "CBQE", "CBIT", "CBD"]
                 _.forEach(jiraPrefixes, function(prefix) {
                     jiraCounts[prefix] = 0;
                 })
+                var uniqueBugs = {}
+                _.forEach(jiraPrefixes, function(prefix) {
+                    uniqueBugs[prefix] = [];
+                })
                 _.forEach(jobs, function(job) {
-                    if (job["claim"] !== "" && !job["olderBuild"]) {
-                        var found = false
-                        _.forEach(Object.keys(claimCounts), function(claim) {
-                            if (job["claim"].startsWith(claim)) {
-                                claimCounts[claim] += 1;
-                                found = true
-                                return false;
-                            }
-                        })
-                        if (!found) {
-                            _.forEach(jiraPrefixes, function(prefix) {
-                                if (job["claim"].startsWith(prefix + "-")) {
-                                    if (claimCounts[job["claim"]]) {
-                                        claimCounts[job["claim"]] += 1;
+                    var foundInJob = [];
+                    _.forEach(job["bugs"], function(bug) {
+                        try {
+                            var prefix = bug.split("-")[0]
+                            if (jiraPrefixes.includes(prefix)) {
+                                if (!foundInJob.includes(bug)) {
+                                    if (claimCounts[bug]) {
+                                        claimCounts[bug].jobCount += 1;
+                                        claimCounts[bug].failedTestCount += job["failCount"]
+                                        claimCounts[bug].skippedTestCount += job["skipCount"]
                                     } else {
-                                        claimCounts[job["claim"]] = 1;
+                                        claimCounts[bug] = {
+                                            jobCount: 1,
+                                            failedTestCount: job["failCount"],
+                                            skippedTestCount: job["skipCount"]
+                                        }
                                     }
-                                    jiraCounts[prefix] += 1
-                                    found = true
+                                    jiraCounts[prefix] += 1;
+                                    foundInJob.push(bug);
+                                }
+                                if (!uniqueBugs[prefix].includes(bug)) {
+                                    uniqueBugs[prefix].push(bug)
+                                }
+                            }
+                            
+                        } catch (e) {
+                            console.error(e)
+                        }
+                    })
+                    _.forEach(job["claim"].split("<br><br>"), function(jobClaim) {
+                        if (jobClaim !== "" && !job["olderBuild"]) {
+                            _.forEach(Object.keys(claimCounts), function(claim) {
+                                if (jobClaim.startsWith(claim)) {
+                                    if (!foundInJob.includes(claim)) {
+                                        foundInJob.push(claim);
+                                        claimCounts[claim].jobCount += 1;
+                                        claimCounts[claim].failedTestCount += job["failCount"]
+                                        claimCounts[claim].skippedTestCount += job["skipCount"]
+                                    }
                                     return false;
                                 }
                             })
                         }
-                    }
+                    })
+                   
                 })
                 var claims = []
                 _.forEach(Object.entries(claimCounts), function(entry) {
-                    if (entry[1] > 0) {
-                        totalClaims += entry[1]
-                        claims.push({ claim: entry[0], count: entry[1] })
+                    var jobCount = entry[1].jobCount
+                    var failedTestCount = entry[1].failedTestCount
+                    var skippedTestCount = entry[1].skippedTestCount
+                    if (jobCount > 0) {
+                        totalClaims += jobCount
+                        claims.push({ claim: entry[0], skippedTestCount: skippedTestCount, failedTestCount: failedTestCount, jobCount: jobCount })
                     }
                 })
+                uniqueBugs["IT"] = uniqueBugs["CBD"].concat(uniqueBugs["CBIT"])
+                delete uniqueBugs["CBD"]
+                delete uniqueBugs["CBIT"]
                 jiraCounts["IT"] = jiraCounts["CBD"] + jiraCounts["CBIT"]
                 delete jiraCounts["CBD"]
                 delete jiraCounts["CBIT"]
@@ -1594,12 +2283,18 @@ angular.module('app.main', [])
                         name = "Test bugs (CBQE)"
                     } else if (prefix === "IT") {
                         name = "IT bugs (CBIT/CBD)"
+                    } else if (prefix === "CBSP") {
+                        name = "Support bugs (CBSP)"
                     }
                     return { 
                         name: name,
                         count: jiraCount[1],
-                        percent: totalClaims == 0 ? 0 : ((jiraCount[1]/totalClaims)*100).toFixed(0)
+                        percent: totalClaims == 0 ? 0 : ((jiraCount[1]/totalClaims)*100).toFixed(0),
+                        unique: uniqueBugs[prefix].length
                     }
+                })
+                .filter(function(jiraCount) {
+                    return jiraCount.count > 0;
                 })
                 $scope.claimSummary = claims;
                 $scope.totalClaims = totalClaims
@@ -1608,7 +2303,7 @@ angular.module('app.main', [])
             }
 
             $scope.jiraCounts = []
-            $scope.showAnalysis = true
+            $scope.showAnalysis = false
             $scope.changeShowAnalysis = function() {
                 $scope.showAnalysis = !$scope.showAnalysis
             }
@@ -1618,39 +2313,726 @@ angular.module('app.main', [])
             $scope.reverse = true
             $scope.activePanel = 0
 
+            function setJobsPerPage(jobsPerPage) {
+                if (jobsPerPage === "All") {
+                    jobsPerPage = $scope.panelTabs[$scope.activePanel].jobs.length;
+                }
+                $scope.jobsPerPage = jobsPerPage;
+                if ($scope.jobsPage > Math.max(0, $scope.numPages() - 1)) {
+                    Data.setJobsPage($scope.numPages() - 1);
+                }
+            }
+
+            $scope.targetBy = Data.getCurrentTarget();
+
+            $scope.jobsPerPage = Data.getJobsPerPage();
+            $scope.jobsPage = Data.getJobsPage();
+            $scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
+                $scope.jobsPage = jobsPage;
+            })
+            $scope.$watch(function() { return Data.getJobsPerPage() }, function(jobsPerPage) {
+                setJobsPerPage(jobsPerPage);
+            })
+
+            $scope.nextPage = function() {
+                if ($scope.nextPageExists()) {
+                    Data.setJobsPage($scope.jobsPage + 1);
+                }
+            }
+            $scope.prevPage = function() {
+                if ($scope.jobsPage > 0) {
+                    Data.setJobsPage($scope.jobsPage - 1);
+                }
+            }
+            $scope.nextPageExists = function() {
+                jobsLength = $scope.panelTabs[$scope.activePanel].jobs.length;
+                return ($scope.jobsPage + 1) * $scope.jobsPerPage < jobsLength - 1;
+            }
+            $scope.setPage = function () {
+                Data.setJobsPage(this.n);
+            };
+            $scope.numPages = function() {
+                jobsLength = $scope.panelTabs[$scope.activePanel].jobs.length;
+                if ($scope.jobsPerPage === 0) {
+                    return 0;
+                }
+                return Math.ceil(jobsLength / $scope.jobsPerPage);
+            }
+            $scope.pageNumbers = function() {
+                var start = $scope.jobsPage - 5;
+                if (start < 0) {
+                    start = 0;
+                }
+                var end = $scope.jobsPage + 5;
+                var numPages = $scope.numPages();
+                if (end > numPages) {
+                    end = numPages;
+                }
+                return _.range(start, end);
+            }
+            function resetPage() {
+                Data.setJobsPage(0);
+                if (Data.getJobsPerPage() === "All") {
+                    $scope.jobsPerPage = $scope.panelTabs[$scope.activePanel].jobs.length;
+                }
+            }
+
+            $scope.predicate = "name";
+            $scope.reverse = false;
             
 
                 $scope.onselect = 
-                    function(jobname,os,comp){
+                    function(jobname,os,comp,variants){
                         var activeJobs = Data.getActiveJobs()
+                        var target = Data.getCurrentTarget()
                         // activeJobs = _.reject(activeJobs, "olderBuild", true)
                         activeJobs = _.reject(activeJobs, "deleted", true)
                         
-                        var filters = {"name":jobname,"os":os,"component":comp}
-                        var requiredJobs = activeJobs
-                        _.forEach(filters, function(value, key) {
-                            requiredJobs = _.filter(requiredJobs, [key,value]);
-                        });
+                        var requiredJobs = activeJobs.filter(function(job) {
+                            return job.name === jobname && job.os === os && job.component === comp
+                        })
+
+                        $scope.model = {};
+                        $scope.model.bestRun = requiredJobs.find(function(job) { return job.olderBuild === false; }).build_id.toString();
+                        $scope.model.changeBestRun = function() {
+                            if ($scope.model.bestRun !== undefined) {
+                                _.forEach($scope.selectedjobdetails, function(job) {
+                                    if (job.build_id === parseInt($scope.model.bestRun)) {
+                                        job.olderBuild = false;
+                                    } else {
+                                        job.olderBuild = true;
+                                    }
+                                })
+                                var updatedJobs = Data.getActiveJobs();
+                                updateScopeWithJobs(updatedJobs, false);
+                                $rootScope.$broadcast("recalculateStats");
+                                QueryService.setBestRun(target, jobname, $scope.model.bestRun, os, comp, $scope.selectedbuild)
+                            }
+                        }
 
                             // requiredJobs = _.filter(activeJobs,["name",jobname,"os"])
                             $scope.len = requiredJobs.length
                             $scope.selectedjobdetails = requiredJobs
-                            $scope.selectedjobname = jobname
+                            $scope.selectedjobname = requiredJobs[0].displayName
                             $scope.selectedbuild = requiredJobs[0].build
                     }
                 
+            // Trend modal handling
+            $scope.trendData = null;
+            $scope.trendLoading = false;
+            $scope.trendJobName = '';
+            $scope.trendBaseVersion = '';
+            $scope.trendChartType = 'scatter'; // 'scatter' or 'bar'
             
+            $scope.toggleChartType = function() {
+                $scope.trendChartType = $scope.trendChartType === 'scatter' ? 'bar' : 'scatter';
+                if ($scope.trendData && $scope.trendData.trend) {
+                    setTimeout(function() {
+                        if ($scope.trendChartType === 'scatter') {
+                            renderTrendChart($scope.trendData.trend);
+                        } else {
+                            renderBarChart($scope.trendData.trend);
+                        }
+                    }, 100);
+                }
+            };
+            
+            $rootScope.$on('openTrendModal', function(event, data) {
+                $scope.trendData = data.trendData;
+                $scope.trendJobName = data.jobName;
+                $scope.trendBaseVersion = data.baseVersion;
+                $scope.trendLoading = false;
+                $scope.trendChartType = 'scatter'; // Reset to scatter view
+                
+                // Open Bootstrap modal
+                $('#trendModal').modal('show');
+                
+                // Render chart after modal is fully shown
+                $('#trendModal').on('shown.bs.modal', function() {
+                    $scope.$apply(function() {
+                        if ($scope.trendData && $scope.trendData.trend) {
+                            setTimeout(function() {
+                                renderTrendChart($scope.trendData.trend);
+                            }, 100);
+                        }
+                    });
+                });
+                
+                // Also try after a delay as fallback
+                setTimeout(function() {
+                    if ($scope.trendData && $scope.trendData.trend) {
+                        var chartContainer = document.getElementById('trend-chart-container');
+                        if (chartContainer && chartContainer.offsetWidth > 0) {
+                            renderTrendChart($scope.trendData.trend);
+                        }
+                    }
+                }, 500);
+            });
+            
+            // Function to render D3 trend chart - Scatter/Timeline visualization (D3 v3 compatible)
+            function renderTrendChart(trendData) {
+                if (!trendData || trendData.length === 0) {
+                    console.log("No trend data to render");
+                    return;
+                }
+                
+                try {
+                    // Clear previous chart
+                    d3.select("#trend-chart").selectAll("*").remove();
+                    
+                    var margin = {top: 40, right: 30, bottom: 80, left: 60};
+                    var container = document.getElementById('trend-chart-container');
+                    if (!container) {
+                        console.error("Chart container not found");
+                        return;
+                    }
+                    var width = container.offsetWidth - margin.left - margin.right;
+                    var height = 400 - margin.top - margin.bottom;
+                    
+                    if (width <= 0 || height <= 0) {
+                        console.error("Invalid dimensions:", width, height);
+                        return;
+                    }
+                    
+                    var svg = d3.select("#trend-chart")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom);
+                    
+                    var g = svg.append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+                    
+                    // Sort trend data by version and run number
+                    var sortedData = trendData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.run_number - b.run_number;
+                    });
+                    
+                    // Get unique versions for X-axis
+                    var uniqueVersions = [];
+                    sortedData.forEach(function(d) {
+                        if (uniqueVersions.indexOf(d.version) === -1) {
+                            uniqueVersions.push(d.version);
+                        }
+                    });
+                    
+                    // Create scales (D3 v3 syntax)
+                    var xScale = d3.scale.ordinal()
+                        .domain(uniqueVersions)
+                        .rangePoints([0, width], 1);
+                    
+                    var maxRunNumber = d3.max(sortedData, function(d) { return d.run_number; }) || 1;
+                    var yScale = d3.scale.linear()
+                        .domain([0.5, maxRunNumber + 0.5])
+                        .nice()
+                        .range([height, 0]);
+                    
+                    // Color function for pass/fail
+                    var colorScale = function(d) {
+                        return d.result === 'pass' ? '#28a745' : '#dc3545';
+                    };
+                    
+                    // Remove grid lines - cleaner look
+                    
+                    // Group data by version for jittering (so multiple runs per version don't overlap)
+                    var versionGroups = {};
+                    sortedData.forEach(function(d) {
+                        if (!versionGroups[d.version]) {
+                            versionGroups[d.version] = [];
+                        }
+                        versionGroups[d.version].push(d);
+                    });
+                    
+                    // Calculate jitter offset for multiple runs in same version
+                    var jitteredData = [];
+                    uniqueVersions.forEach(function(version) {
+                        var runs = versionGroups[version];
+                        var jitterRange = Math.min(30, width / uniqueVersions.length * 0.3);
+                        runs.forEach(function(d, i) {
+                            var jitter = (runs.length > 1) ? 
+                                ((i - (runs.length - 1) / 2) * (jitterRange / runs.length)) : 0;
+                            jitteredData.push({
+                                data: d,
+                                x: xScale(version) + jitter,
+                                y: yScale(d.run_number)
+                            });
+                        });
+                    });
+                    
+                    // Add circles for each run
+                    var circles = g.selectAll(".run-circle")
+                        .data(jitteredData)
+                        .enter()
+                        .append("circle")
+                        .attr("class", "run-circle")
+                        .attr("cx", function(d) { return d.x; })
+                        .attr("cy", function(d) { return d.y; })
+                        .attr("r", 0)
+                        .attr("fill", function(d) { return colorScale(d.data); })
+                        .attr("stroke", function(d) { 
+                            return d.data.result === 'pass' ? '#1e7e34' : '#a71e2a';
+                        })
+                        .attr("stroke-width", 2)
+                        .attr("opacity", 0.8)
+                        .style("cursor", "pointer");
+                    
+                    // Animate circles appearing
+                    circles.transition()
+                        .duration(800)
+                        .delay(function(d, i) { return i * 30; })
+                        .attr("r", function(d) {
+                            // Larger circles for first runs, smaller for later runs
+                            return 6 + (d.data.run_number === 1 ? 2 : 0);
+                        })
+                        .attr("opacity", 0.9);
+                    
+                    // Add hover effects and tooltips
+                    circles.on("mouseover", function(d) {
+                            d3.select(this)
+                                .transition()
+                                .duration(200)
+                                .attr("r", 10)
+                                .attr("opacity", 1)
+                                .attr("stroke-width", 3);
+                            
+                            var tooltip = d3.select("body").append("div")
+                                .attr("class", "trend-tooltip")
+                                .style("opacity", 0)
+                                .style("position", "absolute")
+                                .style("background", "rgba(0, 0, 0, 0.9)")
+                                .style("color", "#fff")
+                                .style("padding", "10px 14px")
+                                .style("border-radius", "6px")
+                                .style("pointer-events", "none")
+                                .style("font-size", "13px")
+                                .style("z-index", "10001")
+                                .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)");
+                            
+                            var tooltipText = "<strong>" + d.data.result.toUpperCase() + "</strong><br/>" +
+                                             "Version: " + d.data.version + "<br/>" +
+                                             "Run #: " + d.data.run_number;
+                            if (d.data.url) {
+                                tooltipText += "<br/><a href='" + d.data.url + "' target='_blank' style='color: #9b8fff; text-decoration: underline;'>View Job →</a>";
+                            }
+                            tooltip.html(tooltipText);
+                            
+                            tooltip.transition()
+                                .duration(200)
+                                .style("opacity", 1);
+                            
+                            var mousePos = d3.mouse(document.body);
+                            tooltip.style("left", (mousePos[0] + 15) + "px")
+                                   .style("top", (mousePos[1] - 10) + "px");
+                        })
+                        .on("mousemove", function(d) {
+                            var mousePos = d3.mouse(document.body);
+                            d3.select(".trend-tooltip")
+                                .style("left", (mousePos[0] + 15) + "px")
+                                .style("top", (mousePos[1] - 10) + "px");
+                        })
+                        .on("mouseout", function(d) {
+                            d3.select(this)
+                                .transition()
+                                .duration(200)
+                                .attr("r", function(d) {
+                                    return 6 + (d.data.run_number === 1 ? 2 : 0);
+                                })
+                                .attr("opacity", 0.9)
+                                .attr("stroke-width", 2);
+                            d3.selectAll(".trend-tooltip").remove();
+                        });
+                    
+                    // Connect all dots with a trend line (chronological order)
+                    // Sort by version and run number for proper connection order
+                    var connectedData = jitteredData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.data.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.data.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.data.run_number - b.data.run_number;
+                    });
+                    
+                    // Create trend line connecting all points
+                    var trendLine = d3.svg.line()
+                        .x(function(d) { return d.x; })
+                        .y(function(d) { return d.y; })
+                        .interpolate("linear"); // Straight lines
+                    
+                    g.append("path")
+                        .datum(connectedData)
+                        .attr("class", "trend-line")
+                        .attr("d", trendLine)
+                        .attr("fill", "none")
+                        .attr("stroke", "#667EEA")
+                        .attr("stroke-width", 2)
+                        .attr("opacity", 0.6)
+                        .style("pointer-events", "none");
+                    
+                    // Add version lines (vertical lines connecting runs of same version)
+                    uniqueVersions.forEach(function(version) {
+                        var versionRuns = jitteredData.filter(function(d) { return d.data.version === version; });
+                        if (versionRuns.length > 1) {
+                            var lineData = versionRuns.map(function(d) { return [d.x, d.y]; });
+                            var line = d3.svg.line()
+                                .x(function(d) { return d[0]; })
+                                .y(function(d) { return d[1]; })
+                                .interpolate("linear");
+                            
+                            g.append("path")
+                                .datum(lineData)
+                                .attr("class", "version-line")
+                                .attr("d", line)
+                                .attr("fill", "none")
+                                .attr("stroke", "#999")
+                                .attr("stroke-width", 1.5)
+                                .attr("stroke-dasharray", "3,3")
+                                .attr("opacity", 0.5)
+                                .style("pointer-events", "none");
+                        }
+                    });
+                    
+                    // Add X axis (D3 v3 syntax)
+                    var xAxis = d3.svg.axis()
+                        .scale(xScale)
+                        .orient("bottom")
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(xAxis)
+                        .selectAll("text")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "11px")
+                        .attr("dy", ".35em");
+                    
+                    // Add Y axis (D3 v3 syntax)
+                    var yAxis = d3.svg.axis()
+                        .scale(yScale)
+                        .orient("left")
+                        .ticks(Math.min(10, maxRunNumber))
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "y axis")
+                        .call(yAxis);
+                    
+                    // Add axis labels
+                    g.append("text")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", 0 - margin.left)
+                        .attr("x", 0 - (height / 2))
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Run Number");
+                    
+                    g.append("text")
+                        .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Version");
+                    
+                    // Legend is now in HTML, not in SVG
+                    
+                    console.log("Chart rendered successfully");
+                } catch (error) {
+                    console.error("Error rendering chart:", error);
+                }
+            }
+            
+            // Function to render bar chart (D3 v3 compatible)
+            function renderBarChart(trendData) {
+                if (!trendData || trendData.length === 0) {
+                    console.log("No trend data to render");
+                    return;
+                }
+                
+                try {
+                    // Clear previous chart
+                    d3.select("#trend-chart").selectAll("*").remove();
+                    
+                    var margin = {top: 40, right: 30, bottom: 80, left: 60};
+                    var container = document.getElementById('trend-chart-container');
+                    if (!container) {
+                        console.error("Chart container not found");
+                        return;
+                    }
+                    var width = container.offsetWidth - margin.left - margin.right;
+                    var height = 400 - margin.top - margin.bottom;
+                    
+                    if (width <= 0 || height <= 0) {
+                        console.error("Invalid dimensions:", width, height);
+                        return;
+                    }
+                    
+                    var svg = d3.select("#trend-chart")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom);
+                    
+                    var g = svg.append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+                    
+                    // Sort trend data by version and run number
+                    var sortedData = trendData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.run_number - b.run_number;
+                    });
+                    
+                    // Group data by version
+                    var versionGroups = {};
+                    sortedData.forEach(function(d) {
+                        if (!versionGroups[d.version]) {
+                            versionGroups[d.version] = [];
+                        }
+                        versionGroups[d.version].push(d);
+                    });
+                    
+                    // Get unique versions for X-axis
+                    var uniqueVersions = Object.keys(versionGroups).sort(function(a, b) {
+                        var aNum = parseInt(a.split('-')[1] || '0');
+                        var bNum = parseInt(b.split('-')[1] || '0');
+                        return aNum - bNum;
+                    });
+                    
+                    // Create scales (D3 v3 syntax)
+                    var xScale = d3.scale.ordinal()
+                        .domain(uniqueVersions)
+                        .rangeBands([0, width], 0.2);
+                    
+                    var maxRunNumber = d3.max(sortedData, function(d) { return d.run_number; }) || 1;
+                    var yScale = d3.scale.linear()
+                        .domain([0, maxRunNumber])
+                        .nice()
+                        .range([height, 0]);
+                    
+                    // Color function for pass/fail
+                    var colorScale = function(d) {
+                        return d.result === 'pass' ? '#28a745' : '#dc3545';
+                    };
+                    
+                    // Calculate bar width (single bar per version, will be stacked)
+                    var barWidth = xScale.rangeBand() * 0.6;
+                    var barXOffset = (xScale.rangeBand() - barWidth) / 2;
+                    
+                    // Create stacked bars for each version
+                    uniqueVersions.forEach(function(version, versionIndex) {
+                        var runs = versionGroups[version].slice().sort(function(a, b) {
+                            return a.run_number - b.run_number;
+                        });
+                        var versionX = xScale(version) + barXOffset;
+                        
+                        // Calculate cumulative heights for stacking
+                        // Each segment height should represent the run number position
+                        var cumulativeY = height;
+                        var segmentDelay = 0;
+                        var previousRunNumber = 0;
+                        
+                        runs.forEach(function(d, runIndex) {
+                            // Each segment represents one run
+                            // Height is based on the difference between current and previous run number
+                            var currentRunY = yScale(d.run_number);
+                            var previousRunY = runIndex === 0 ? height : yScale(previousRunNumber);
+                            var segmentHeight = previousRunY - currentRunY;
+                            var segmentY = currentRunY;
+                            
+                            // Store previous run number for next iteration
+                            previousRunNumber = d.run_number;
+                            
+                            var segment = g.append("rect")
+                                .attr("class", "trend-bar-segment")
+                                .attr("x", versionX)
+                                .attr("y", cumulativeY)
+                                .attr("width", barWidth)
+                                .attr("height", 0)
+                                .attr("fill", colorScale(d))
+                                .attr("stroke", d.result === 'pass' ? '#1e7e34' : '#a71e2a')
+                                .attr("stroke-width", 2)
+                                .attr("opacity", 0.9)
+                                .style("cursor", "pointer")
+                                .datum({
+                                    data: d,
+                                    runIndex: runIndex,
+                                    totalRuns: runs.length
+                                }); // Store data for tooltip
+                            
+                            // Animate segments appearing from bottom to top
+                            segment.transition()
+                                .duration(400)
+                                .delay(versionIndex * 150 + segmentDelay)
+                                .attr("y", segmentY)
+                                .attr("height", segmentHeight)
+                                .attr("opacity", 0.9);
+                            
+                            segmentDelay += 80;
+                            cumulativeY = segmentY;
+                            
+                            // Add hover effects and tooltips for each segment
+                            segment.on("mouseover", function(d) {
+                                    d3.select(this)
+                                        .transition()
+                                        .duration(200)
+                                        .attr("opacity", 1)
+                                        .attr("stroke-width", 4)
+                                        .attr("stroke", "#fff");
+                                    
+                                    var tooltip = d3.select("body").append("div")
+                                        .attr("class", "trend-tooltip")
+                                        .style("opacity", 0)
+                                        .style("position", "absolute")
+                                        .style("background", "rgba(0, 0, 0, 0.9)")
+                                        .style("color", "#fff")
+                                        .style("padding", "10px 14px")
+                                        .style("border-radius", "6px")
+                                        .style("pointer-events", "none")
+                                        .style("font-size", "13px")
+                                        .style("z-index", "10001")
+                                        .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)");
+                                    
+                                    var tooltipText = "<strong>" + d.data.result.toUpperCase() + "</strong><br/>" +
+                                                     "Version: " + d.data.version + "<br/>" +
+                                                     "Run #: " + d.data.run_number + " of " + d.totalRuns;
+                                    if (d.data.url) {
+                                        tooltipText += "<br/><a href='" + d.data.url + "' target='_blank' style='color: #9b8fff; text-decoration: underline;'>View Job →</a>";
+                                    }
+                                    tooltip.html(tooltipText);
+                                    
+                                    tooltip.transition()
+                                        .duration(200)
+                                        .style("opacity", 1);
+                                    
+                                    var mousePos = d3.mouse(document.body);
+                                    tooltip.style("left", (mousePos[0] + 15) + "px")
+                                           .style("top", (mousePos[1] - 10) + "px");
+                                })
+                                .on("mousemove", function(d) {
+                                    var mousePos = d3.mouse(document.body);
+                                    d3.select(".trend-tooltip")
+                                        .style("left", (mousePos[0] + 15) + "px")
+                                        .style("top", (mousePos[1] - 10) + "px");
+                                })
+                                .on("mouseout", function(d) {
+                                    d3.select(this)
+                                        .transition()
+                                        .duration(200)
+                                        .attr("opacity", 0.9)
+                                        .attr("stroke-width", 2)
+                                        .attr("stroke", function() {
+                                            var result = d.data.result;
+                                            return result === 'pass' ? '#1e7e34' : '#a71e2a';
+                                        });
+                                    d3.selectAll(".trend-tooltip").remove();
+                                });
+                        });
+                    });
+                    
+                    // Add X axis (D3 v3 syntax)
+                    var xAxis = d3.svg.axis()
+                        .scale(xScale)
+                        .orient("bottom")
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(xAxis)
+                        .selectAll("text")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "11px")
+                        .attr("dy", ".35em");
+                    
+                    // Add Y axis (D3 v3 syntax)
+                    var yAxis = d3.svg.axis()
+                        .scale(yScale)
+                        .orient("left")
+                        .ticks(Math.min(10, maxRunNumber))
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "y axis")
+                        .call(yAxis);
+                    
+                    // Add axis labels
+                    g.append("text")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", 0 - margin.left)
+                        .attr("x", 0 - (height / 2))
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Run Number");
+                    
+                    g.append("text")
+                        .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Version");
+                    
+                    // Legend is now in HTML, not in SVG
+                    
+                    console.log("Bar chart rendered successfully");
+                } catch (error) {
+                    console.error("Error rendering bar chart:", error);
+                }
+            }
+            
+            $scope.search = ""
+            $scope.onSearchChange = function() {
+                jobs = Data.getActiveJobs()
+                updateScopeWithJobs(jobs)
+            }
+            $scope.searchClaim = function(claim) {
+                if ($scope.search === claim) {
+                    $scope.search = ""
+                } else {
+                    $scope.search = claim
+                }
+                $scope.onSearchChange()
+            }
 
-            function updateScopeWithJobs(jobs){
+            function updateScopeWithJobs(jobs, reset){
+                if (reset === undefined) {
+                    reset = true;
+                }
 
                 jobs = _.reject(jobs, "olderBuild", true)
                 jobs = _.reject(jobs, "deleted", true)
+                if ($scope.search !== "") {
+                    jobs = _.reject(jobs, function(job) { 
+                        return !(job.bugs.includes($scope.search) ||
+                                job.claim.includes($scope.search) ||
+                                job.name.includes($scope.search) || 
+                                job.triage.includes($scope.search)) 
+                    })
+                }
                 var jobsCompleted = _.uniq(_.reject(jobs, ["result", "PENDING"]))
                 var jobsSuccess = _.uniq(_.filter(jobs, ["result", "SUCCESS"]))
                 var jobsAborted = _.uniq(_.filter(jobs, ["result", "ABORTED"]))
                 var jobsUnstable = _.uniq(_.filter(jobs, ["result", "UNSTABLE"]))
+                var jobsInstallFailed = _.uniq(_.filter(jobs, ["result", "INST_FAIL"]))
                 var jobsFailed = _.uniq(_.filter(jobs, ["result", "FAILURE"]))
                 var jobsPending = _.uniq(_.filter(jobs, ["result", "PENDING"]))
+                var jobsSkip = _.uniq(_.filter(jobs, function(job) { return job["skipCount"] > 0 }))
                 
 
                 $scope.panelTabs = [
@@ -1659,10 +3041,38 @@ angular.module('app.main', [])
                     {title: "Jobs Aborted", jobs: jobsAborted},
                     {title: "Jobs Unstable", jobs: jobsUnstable},
                     {title: "Jobs Failed", jobs: jobsFailed},
-                    {title: "Jobs Pending", jobs: jobsPending}
+                    {title: "Jobs Install Failed", jobs: jobsInstallFailed},
+                    {title: "Jobs Skipped", jobs: jobsSkip},
+                    {title: "Jobs Pending", jobs: jobsPending},
                 ]                
 
+                $scope.variantNames = []
+                _.forEach(jobs, function(job) {
+                    if (job.variants) {
+                        _.forEach(job.variants, function(_, variant) {
+                            if (!$scope.variantNames.includes(variant)) {
+                                $scope.variantNames.push(variant)
+                            }
+                        })
+                    }
+                })
+                // sort variant names, ignore case
+                $scope.variantNames.sort(function(a, b) { 
+                    var ia = a.toLowerCase();
+                    var ib = b.toLowerCase();
+                    return ia < ib ? -1 : ia > ib ? 1 : 0;
+                })
+
+                $scope.variantName = function(name) {
+                    return name.split("_").map(function(part) {
+                        return part[0].toUpperCase() + part.slice(1)
+                    }).join(" ")
+                }
+
                 getClaimSummary(jobs)
+                if (reset) {
+                    resetPage();
+                }
             }
 
             function getJobs() {
@@ -1766,20 +3176,60 @@ angular.module('app.main', [])
                 .map(function(k){
                     return {key: k, disabled: false}
                 })
-            var allVersions = _.uniq(_.map(buildJobs, "server_version"))
+            var allVersions = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.server_version !== undefined }), "server_version"))
                 .map(function (k) {
-                    return k ? {key: k, disabled: false}: null
+                    return {key: k, disabled: false}
                 })
+            var allDapi = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.dapi !== undefined }), "dapi"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var allNebula = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.dni !== undefined }), "dni"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var allEnv = _.uniq(_.map(_.filter(buildJobs, function(job) { return job.env !== undefined }), "env"))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            var sidebarItems = {platforms: allPlatforms, features: allFeatures, serverVersions: allVersions, dapiVersions: allDapi, nebulaVersions: allNebula, envVersions: allEnv }
+            var allVariants = []
 
-            Data.setSideBarItems({platforms: allPlatforms, features: allFeatures, serverVersions: allVersions});
+            _.forEach(jobs, function(job) {
+                if (job.variants) {
+                    _.forEach(Object.keys(job.variants), function(variant) {
+                        if (!allVariants.includes(variant)) {
+                            allVariants.push(variant)
+                        }
+                    })
+                }
+            })
+
+            _.forEach(allVariants, function(variant) {
+                sidebarItems[variant] = _.uniq(_.map(_.filter(jobs, function(job) { return job.variants && job.variants[variant] !== undefined }), "variants."+variant))
+                .map(function (k) {
+                    return {key: k, disabled: false}
+                })
+            })
+
+            Data.setSideBarItems(sidebarItems);
 
 
 
             $scope.changePanelJobs = function(i){
                 $scope.activePanel = i
+                resetPage();
             }
 
             $scope.msToTime = msToTime
+            $scope.msToDate = msToDate
+            $scope.timestampToDate = function(timestmap) {
+                if (timestmap) {
+                    return new Date(timestmap).toLocaleString()
+                } else {
+                    return ""
+                }
+            }
             $scope.$watch(function(){ return Data.getActiveJobs() },
                 function(activeJobs){
                     if(activeJobs){
@@ -1792,8 +3242,10 @@ angular.module('app.main', [])
     .controller('JobDetailsCtrl',['$scope','$state','$stateParams','Data','target',
                 function($scope,$state,$stateParams,Data,target){
                     
+                    $scope.openClaims = []
                     
                     $scope.msToTime = msToTime
+                    $scope.msToDate = msToDate
                     var jobname = $stateParams.jobName
                     
                     $scope.$watch(function(){
@@ -1812,6 +3264,42 @@ angular.module('app.main', [])
                     )
 
     }])
+    .directive("claimTest", [function() {
+        return {
+            scope: {claim: "="},
+            templateUrl: "partials/claim.html",
+            link: function(scope, element) {
+                var jobName = scope.$parent.job.name;
+                scope.formatClaim = formatClaim
+                var linesToShow = 50;
+                scope.shortClaim = (scope.claim.length < linesToShow) ? scope.claim : scope.claim.split('<br><br>')[0].slice(0, linesToShow) + '...'
+                
+                // Find the parent td element
+                var parentTd = element.parent();
+                while (parentTd.length && parentTd[0].tagName !== 'TD') {
+                    parentTd = parentTd.parent();
+                }
+                
+                scope.scope = {
+                    showFullClaim: scope.$parent.$parent.openClaims.has(jobName),
+                    changeShowFullClaim: function() {
+                        if (this.showFullClaim) {
+                            scope.$parent.$parent.openClaims.delete(jobName)
+                            if (parentTd.length) parentTd.removeClass('claim-expanded')
+                        } else {
+                            scope.$parent.$parent.openClaims.add(jobName)
+                            if (parentTd.length) parentTd.addClass('claim-expanded')
+                        }
+                        this.showFullClaim = !this.showFullClaim
+                    }
+                }
+                // Set initial state
+                if (scope.scope.showFullClaim && parentTd.length) {
+                    parentTd.addClass('claim-expanded')
+                }
+            }
+        }
+    }])
 
     .directive('claimCell', ['Data', 'QueryService', function(Data, QueryService){
         return {
@@ -1819,67 +3307,235 @@ angular.module('app.main', [])
             scope: {job: "="},
             templateUrl: 'partials/claimcell.html',
             link: function(scope, elem, attrs){
-
-                if(scope.job.customClaim){  // override claim
-                    scope.job.claim = scope.job.customClaim
+                scope.editClaim = false;
+                scope.scope = {
+                    bugsText: scope.job.bugs.join(", "),
+                    saveClaim: function() {
+                        var bugs = this.bugsText
+                        var validBugs = true;
+                        if (bugs === "") {
+                            bugs = []
+                        } else {
+                           bugs = bugs.split(",").map(function (bug) { return bug.trim() })
+                           _.forEach(bugs, function(bug) {
+                                console.log(bug)
+                                var validBug = false;
+                                _.forEach(jiraPrefixes, function(prefix) {
+                                    if (bug.startsWith(prefix + "-") && !isNaN(bug.split("-")[1])) {
+                                        validBug = true;
+                                    }
+                                })
+                                if (!validBug) {
+                                    validBugs = false;
+                                    return false;
+                                }
+                            })
+                        }
+                        if (validBugs) {
+                            scope.job.bugs = bugs
+                            var target = Data.getCurrentTarget()
+                            var name = scope.job.name
+                            var build_id = scope.job.build_id
+                            var bugs = scope.job.bugs
+                            var os = scope.job.os
+                            var comp = scope.job.component
+                            var version = scope.job.build
+                            QueryService.claimJob("bugs", target, name, build_id, bugs, os, comp, version)
+                                .catch(function(err){
+                                    alert("error saving claim: "+err.err)
+                                }).then(function() {
+                                    scope.editClaim = false;
+                                })
+                        } else {
+                            alert("Invalid bugs list, must be " + jiraPrefixes.join(", "))
+                        }
+                    }
                 }
+                scope.formatBugs = function() {
+                    return scope.job.bugs.map(function(bug) {
+                        return '<a target="_blank" href="https://issues.couchbase.com/browse/' + bug + '">' + bug + '</a>'
+                    }).join(", ")
+                }
+            }
+        }
+    }])
 
-                var oldClaim = ""
-                
-                $(elem).mouseover(function(){
-                    if(scope.job.claim != ""){
-                        oldClaim = scope.job.claim
-                    }
-                    else{
-                        oldClaim = "No Claim for this build"
-                    }
-                    $('[data-toggle="popover"]').popover({
-                        placement : 'top',
-                        trigger : 'hover',
-                        content : scope.job.claim
-                    });
-                
-                });
-                // publish on blur
-                scope.editClaim = false
-                scope.saveClaim = function(){
-                    // publish
+    .directive('triageCell', ['Data', 'QueryService', function(Data, QueryService){
+        return {
+            restrict: 'E',
+            scope: {job: "="},
+            templateUrl: 'partials/triagecell.html',
+            link: function(scope, elem, attrs){
+                scope.editClaim = false;
+                scope.saveClaim = function() {
                     var target = Data.getCurrentTarget()
                     var name = scope.job.name
                     var build_id = scope.job.build_id
-                    var claim = scope.job.claim
+                    var triage = scope.job.triage
                     var os = scope.job.os
                     var comp = scope.job.component
                     var version = scope.job.build
-                    QueryService.claimJob(target, name, build_id, claim,os,comp,version)
+                    QueryService.claimJob("triage", target, name, build_id, triage, os, comp, version)
                         .catch(function(err){
-                            scope.job.claim = "error saving claim: "+err.err
+                            alert("error saving claim: "+err.err)
+                        }).then(function() {
+                            scope.editClaim = false;
                         })
-                    scope.updateClaim()
-                    scope.editClaim = false
                 }
-                scope.showFullClaim = false
-                scope.changeShowFullClaim = function() {
-                    scope.showFullClaim = !scope.showFullClaim
-                    scope.updateClaim()
+
+            }
+        }
+    }])
+    .directive('pagination', ['Data', function(Data) {
+        return {
+            restrict: 'E',
+            scope: {},
+            templateUrl: 'partials/pagination.html',
+            link: function(scope, element, attrs) {
+                scope.jobsPage = Data.getJobsPage();
+                scope.nextPageExists = scope.$parent.nextPageExists;
+                scope.pageNumbers = scope.$parent.pageNumbers;
+                scope.nextPage = scope.$parent.nextPage;
+                scope.prevPage = scope.$parent.prevPage;
+                scope.setPage = scope.$parent.setPage;
+                scope.jobsPerPageChoices = [20, 50, 100, 500, 1000, 'All'];
+                scope.jobsPerPage = Data.getJobsPerPage();
+
+                scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
+                    scope.jobsPage = jobsPage;
+                })
+
+                scope.$watch(function() { return Data.getJobsPerPage() }, function(jobsPerPage) {
+                    scope.jobsPerPage = jobsPerPage;
+                })
+
+                scope.onJobsPerPageChange = function() {
+                    Data.setJobsPerPage(scope.jobsPerPage);
                 }
-                scope.updateClaim = function() {
-                    scope.claim = (scope.showFullClaim || scope.job.claim.length < 100) ? scope.job.claim : scope.job.claim.split('<br><br>')[0].slice(0, 100) + '...'
+
+            }
+        }
+
+    }])
+    .directive('trendButton', ['QueryService', '$rootScope', function(QueryService, $rootScope){
+        return {
+            restrict: 'E',
+            scope: {job: "=", build: "="},
+            templateUrl: 'partials/trend_button.html',
+            link: function(scope, elem, attrs){
+                scope.loading = false;
+                scope.error = false;
+                
+                scope.openTrend = function() {
+                    if (scope.loading) return;
+                    
+                    // Extract base version from build (e.g., "8.1.0-1228" -> "8.1.0")
+                    var baseVersion = scope.build ? scope.build.split('-')[0] : '';
+                    if (!baseVersion || !scope.job) {
+                        alert("Unable to determine base version or job information");
+                        return;
+                    }
+                    
+                    // Construct document ID: baseVersion_OS_COMPONENT_jobName
+                    var docId = baseVersion + '_' + scope.job.os + '_' + scope.job.component + '_' + scope.job.name;
+                    
+                    scope.loading = true;
+                    scope.error = false;
+                    
+                    QueryService.getTrend(docId)
+                        .then(function(trendData) {
+                            scope.loading = false;
+                            if (trendData) {
+                                // Broadcast event to open trend modal
+                                $rootScope.$broadcast('openTrendModal', {
+                                    trendData: trendData,
+                                    jobName: scope.job.displayName || scope.job.name,
+                                    baseVersion: baseVersion
+                                });
+                            } else {
+                                alert("No trend data found for this job");
+                            }
+                        })
+                        .catch(function(e) {
+                            scope.loading = false;
+                            scope.error = true;
+                            var errorMsg = e.data && e.data.error ? e.data.error : "Failed to fetch trend data";
+                            alert(errorMsg);
+                        });
+                };
+            }
+        }
+    }])
+    .directive('rerunButton', ['QueryService', function(QueryService){
+        return {
+            restrict: 'E',
+            scope: {job: "="},
+            templateUrl: 'partials/rerun_button.html',
+            link: function(scope, elem, attrs){
+                scope.submitting = false;
+                scope.error = false;
+                scope.dispatched = false;
+                
+                // Check if rerun should be disabled based on run count
+                scope.isRerunDisabled = function() {
+                    return scope.job.runCount && scope.job.runCount > 2;
+                };
+                
+                scope.rerunJob = function() {
+                    // Prevent rerun if disabled due to run count
+                    if (scope.isRerunDisabled()) {
+                        alert("Rerun disabled: Job has more than 3 runs (" + scope.job.runCount + " runs)");
+                        return;
+                    }
+                    
+                    if (!confirm("Rerun " + scope.job.name + "?")) {
+                        return;
+                    }
+                    scope.error = false;
+                    scope.submitting = true;
+                    scope.dispatched = false;
+                    QueryService.rerunJob(scope.job.url + scope.job.build_id, null)
+                        .then(function() {
+                            scope.submitting = false;
+                            scope.dispatched = true;
+                        })
+                        .catch(function(e) {
+                            scope.submitting = false;
+                            scope.error = true;
+                            if (e.data.err) {
+                                alert(e.data.err);
+                            }
+                        })
                 }
-                scope.updateClaim()
+                scope.btnText = function() {
+                    if (scope.isRerunDisabled()) {
+                        return "Max runs reached";
+                    }
+                    if (scope.error) {
+                        return "Error dispatching";
+                    }
+                    if (scope.submitting) {
+                        return "Dispatching...";
+                    }
+                    if (scope.dispatched) {
+                        return "Dispatched";
+                    }
+                    return "Rerun";
+                }
             }
         }
     }])
 
 
 
-
 // https://coderwall.com/p/wkdefg/converting-milliseconds-to-hh-mm-ss-mmm
 function msToTime(duration) {
-    var milliseconds = parseInt((duration%1000)/100)
-        , seconds = parseInt((duration/1000)%60)
-        , minutes = parseInt((duration/(1000*60))%60)
-        , hours = parseInt((duration/(1000*60*60))%24);
+    var milliseconds = duration % 1000;
+    duration = (duration - milliseconds) / 1000;
+    var seconds = duration % 60;
+    duration = (duration - seconds) / 60;
+    var minutes = duration % 60;
+    var hours = (duration - minutes) / 60;
 
     hours = (hours < 10) ? "0" + hours : hours;
     minutes = (minutes < 10) ? "0" + minutes : minutes;
@@ -1888,6 +3544,13 @@ function msToTime(duration) {
     return hours + ":" + minutes + ":" + seconds;
 }
 
+
+function msToDate(duration) {
+    var obj = new Date(duration);
+    var time = obj.getUTCHours() + ":" + obj.getUTCMinutes();
+    var date = obj.getDate() + "/" + (obj.getMonth() + 1) + "/" + obj.getFullYear();
+    return date + " - " + time;
+}
 
 angular.module('svc.query', [])
 	.service("QueryService",['$http', 'Data',
@@ -1921,9 +3584,9 @@ angular.module('svc.query', [])
                                return response.data
                         })
 			},
-			claimJob: function(target, name, build_id, claim,os,comp,build){
+			claimJob: function(type, target, name, build_id, claim, os, comp, build){
 				var url = ["claim", target, name, build_id].join("/")
-				return $http.post(url, {claim: claim,os:os,comp:comp,build:build})
+				return $http.post(url, {type: type, claim: claim, os: os, comp: comp, build: build})
 			},
 			getBuildSummary: function (buildId) {
 				var url = ["getBuildSummary", buildId].join("/")
@@ -1931,6 +3594,39 @@ angular.module('svc.query', [])
 					.then(function (response) {
 						return response.data
                     })
+			},
+			setBestRun: function(target, name, build_id, os, comp, build) {
+				var url = ["setBestRun", target, name, build_id].join("/")
+				return $http.post(url, {os:os,comp:comp,build:build})
+			},
+			rerunJob: function(jobUrl, cherryPick) {
+				return $http.post("rerunJob", { cherryPick: cherryPick, jobUrl: jobUrl })
+			},
+			getReport: function(version, component) {
+				var url = ["report", version, component].join("/")
+				return $http({"url": url})
+					.then(function(response) {
+						return response.data
+					})
+					.catch(function(error) {
+						if (error.status === 404) {
+							return null; // Report not found
+						}
+						throw error;
+					})
+			},
+			getTrend: function(docId) {
+				var url = ["trend", docId].join("/")
+				return $http({"url": url})
+					.then(function(response) {
+						return response.data
+					})
+					.catch(function(error) {
+						if (error.status === 404) {
+							return null; // Trend data not found
+						}
+						throw error;
+					})
 			}
 		  }
 		}])
@@ -1945,27 +3641,21 @@ angular.module('app.sidebar', [])
 	  		link: function(scope, elem, attrs){
 
 	  		  scope.showPerc = false
-	  		  scope.disablePlatforms = false
-	  		  scope.disableFeatures = false
-			  scope.disabledServerVersions = false
+			  scope.disabled = {}
+
               scope.buildVersion = Data.getBuild()
 			  scope.targetBy = Data.getCurrentTarget()
 
 	  		  scope.toggleAll = function(type){
-	  		  	var isDisabled;
-	  		  	
-	  		  	if(type=="platforms"){
-	  		  		isDisabled = !scope.disablePlatforms
-		  		  	scope.disablePlatforms = isDisabled
-				 } else if(type=="features"){
-					isDisabled = !scope.disableFeatures
-					scope.disableFeatures = isDisabled
-		  		 } else if(type=="serverVersions"){
-					isDisabled = !scope.disabledServerVersions
-					scope.disabledServerVersions = isDisabled
-				}
+	  		  	var isDisabled = !scope.disabled[type];
+				scope.disabled[type] = isDisabled
 	  		  	Data.toggleAllSidebarItems(type, isDisabled)
 	  		  }
+			  scope.variantName = function(name) {
+				return name.split("_").map(function(part) {
+					return part[0].toUpperCase() + part.slice(1)
+				}).join(" ")
+			  }
 			  
 			  // Detect when build has changed
 			  scope.$watch(function(){ return Data.getSideBarItems() }, 
@@ -1976,22 +3666,37 @@ angular.module('app.sidebar', [])
 					// only update sidebar items on build change
 					// if(items.buildVersion != last.buildVersion){
 						scope.buildVersion = items.buildVersion
-					    scope.sidebarItems = {
-					        platforms: _.map(items["platforms"], "key"),
-							features: _.map(items["features"], "key"),
-							serverVersions: _.map(items["serverVersions"], "key")
-						}
+					    scope.sidebarItems = {}
+						_.forEach(items, function(values, name) {
+							if (name === "buildVersion") {
+								return;
+							}
+							scope.sidebarItems[name] = _.map(values, "key")
+							if (scope.disabled[name] === undefined) {
+								scope.disabled[name] = false
+							}
+						})
+						// variants are any filters that are not the default
+						// sort variant names, ignore case
+						scope.sidebarItemsVariants = Object.keys(scope.sidebarItems).filter(function(item) {
+							return !["platforms", "features", "serverVersions", "dapiVersions", "nebulaVersions", "envVersions"].includes(item);
+						}).sort(function(a, b) { 
+							var ia = a.toLowerCase();
+							var ib = b.toLowerCase();
+							return ia < ib ? -1 : ia > ib ? 1 : 0;
+						})
 						
 					// }
 
 					// if all sidebar items of a type selected
 					// enable all checkmark
-					var noPlatformsDisabled = !_.some(_.map(items["platforms"], "disabled"))
-					var noFeaturesDisabled = !_.some(_.map(items["features"], "disabled"))
-					var noServerVersionsDisabled = !_.some(_.map(items["serverVersions"], "disabled"))
-					scope.disablePlatforms = !noPlatformsDisabled
-					scope.disableFeatures = !noFeaturesDisabled
-					scope.disabledServerVersions = !noServerVersionsDisabled
+					_.forEach(items, function(values, name) {
+						if (name === "buildVersion") {
+							return;
+						}
+						noDisabled = !_.some(_.map(values, "disabled"))
+						scope.disabled[name] = !noDisabled
+					})
 
 				}, true)
 
@@ -1999,7 +3704,7 @@ angular.module('app.sidebar', [])
 	  	}
   }])
 
-  .directive('sidebarItem', ['Data', function(Data){
+  .directive('sidebarItem', ['Data', '$rootScope', function(Data, $rootScope){
   	return {
   		restrict: 'E',
   		scope: {
@@ -2013,7 +3718,16 @@ angular.module('app.sidebar', [])
   			//TODO: allow modify by location url
 
   			scope.disabled = false
-  			scope.stats = Data.getItemStats(scope.key, scope.type)
+			scope.stats = Data.getItemStats(scope.key, scope.type)
+			scope.showDashboardUrls = Data.getCurrentTarget() === "server" && Data.getSelectedVersion() === "7.0.0"
+			
+			scope.openAIReport = function(event) {
+				event.stopPropagation();
+				var build = Data.getBuild(); // Get current build (e.g., "8.1.0-1228")
+				var component = scope.key; // Component name (e.g., "BACKUP_RECOVERY")
+				// Build version is already in the format we need (e.g., "8.1.0-1228")
+				$rootScope.$broadcast('openAIReport', { version: build, component: component });
+			}
 
   			scope.getRunPercent = function(){
   				if(!scope.disabled){
@@ -2021,26 +3735,38 @@ angular.module('app.sidebar', [])
 	  			}
 			  }
 			  
+			scope.getRunPercentNum = function(){
+				if(!scope.disabled && scope.stats && scope.stats.percStats){
+					var runPerc = scope.stats.percStats.run;
+					if(!runPerc) return 0;
+					if(typeof runPerc === 'string'){
+						var num = parseFloat(runPerc.replace('%', '').replace(/\s/g, ''));
+						return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+					}
+					var num = parseFloat(runPerc);
+					return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+				}
+				return 0;
+			}
+			  
 			scope.getDashboardUrl = function() {
+				if (!scope.showDashboardUrls) {
+					return null;
+				}
 				var dashboardMap = {
 					'2I_MOI': 'ovawbLBGk',
-					'2I_REBALANCE': 'Yr2QbLBMz',
 					ANALYTICS: 'Qb8QbYfGz',
-					AUTO_FAILOVER: 'mO6lbYBGz',
 					BACKUP_RECOVERY: 'Dv_QxLfGz',
 					BUILD_SANITY: 'IPm-bSLMk',
 					CE_ONLY: '80ZuxLBGk',
 					CLI: 'U6gubLfMz',
 					COLLECTIONS: 'BGtwbLfMk',
-					COMPRESSION: 'RQX_bYfMz',
 					DURABILITY: 'qH5QbYBMz',
 					EP: 'aTj_xYBGk',
-					EPHEMERAL: 'feYwbLBMk',
 					EVENTING: 'k2QQbLfMk',
 					FTS: 'pBAwxLfGk',
 					GEO: 'Dn4ubYfGz',
 					GOXDCR: 'h1JQbLfGz',
-					IMPORT_EXPORT: 'kf9lbLBGk',
 					IPV6: 'K_rQxLBGz',
 					LOG_REDACTION: 'Cv7XxYfMz',
 					MAGMA: '09PQxLBMz',
@@ -2048,13 +3774,10 @@ angular.module('app.sidebar', [])
 					MOBILE_CONVERGENCE: 'LyywbLfGk',
 					NSERV: 'iUowxYfGz',
 					OS_CERTIFY: 'Od2-6tfMk',
-					PLASMA: 'qiLwbLfGk',
 					QUERY: 'C2dQxYBMk',
-					RBAC: 'KGXQbYBMz',
 					RQG: 'tnfwbYBMk',
 					RZA: 'iRIubYBMz',
 					SANITY: 'tGRa6tBMk',
-					SDK: 'Bdq_bLBGz',
 					SECURITY: 'SpxQxYfGk',
 					SUBDOC: 'feuQbYBGz',
 					TUNABLE: '_LmXxYBMk',
@@ -2123,6 +3846,11 @@ angular.module('app.sidebar', [])
 			  	// update item stats
                 scope.stats = Data.getItemStats(scope.key, scope.type)
 			}, true)
+
+			scope.$on('recalculateStats', function() {
+				// update item stats e.g. when updating best run
+                scope.stats = Data.getItemStats(scope.key, scope.type);
+			})
 
   		}
   	}
@@ -2300,10 +4028,10 @@ angular.module('app.target', [])
         }])
 
 
-    .factory('ViewTargets', ['COUCHBASE_TARGET', 'SDK_TARGET', 'SG_TARGET', 'CBLITE_TARGET', 'CBO_TARGET',
-  	function (COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET){
+    .factory('ViewTargets', ['COUCHBASE_TARGET', 'SDK_TARGET', 'SG_TARGET', 'CBLITE_TARGET', 'CBO_TARGET','CAPELLA_TARGET','SERVERLESS_TARGET',
+  	function (COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET, CAPELLA_TARGET, SERVERLESS_TARGET){
 
-      var viewTargets = [COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET]
+      var viewTargets = [COUCHBASE_TARGET, SDK_TARGET, SG_TARGET, CBLITE_TARGET, CBO_TARGET, CAPELLA_TARGET, SERVERLESS_TARGET]
       var targetMap = {} // reverse lookup map
 
       // allow reverse lookup by bucket
@@ -2317,7 +4045,7 @@ angular.module('app.target', [])
             allTargets: function(){
             	return viewTargets
             },
-            getTarget: function(target){3
+            getTarget: function(target){
             	return targetMap[target]
             }
         }
@@ -2358,6 +4086,21 @@ angular.module('app.target', [])
          "key": "abspassed",
          "value": 0,
          "options": [0, 50, 100, 500]
-  });
+  })
+  .value('CAPELLA_TARGET', {
+         "title": "Capella",
+         "bucket": "capella",
+         "key": "abspassed",
+         "value": 0,
+         "options": [0, 50, 100, 500]
+  })
+  .value('SERVERLESS_TARGET', {
+        "title": "Serverless",
+        "bucket": "serverless",
+        "key": "abspassed",
+        "value": 0,
+        "options": [0, 50, 100, 500]
+  })
+;
 
 

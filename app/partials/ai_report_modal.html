@@ -1,0 +1,72 @@
+<div class="ai-report-modal-overlay" ng-if="showModal" ng-click="closeModal()">
+  <div class="ai-report-modal" ng-click="$event.stopPropagation()">
+    <div class="ai-report-modal-header">
+      <h2>
+        <i class="glyphicon glyphicon-flash"></i>
+        AI Error Analysis Report
+      </h2>
+      <button class="ai-report-close" ng-click="closeModal()">
+        <i class="glyphicon glyphicon-remove"></i>
+      </button>
+    </div>
+    
+    <div class="ai-report-modal-body">
+      <div ng-if="loading" class="ai-report-loading">
+        <i class="glyphicon glyphicon-refresh spinning"></i>
+        <p>Loading report...</p>
+      </div>
+      
+      <div ng-if="error && !loading" class="ai-report-error">
+        <i class="glyphicon glyphicon-exclamation-sign"></i>
+        <p>{{ error }}</p>
+      </div>
+      
+      <div ng-if="report && !loading" class="ai-report-content">
+        <div class="ai-report-summary">
+          <div class="summary-card">
+            <h3>{{ report.component }}</h3>
+            <p class="version-info">Version: {{ report.version }}</p>
+          </div>
+          <div class="summary-stats">
+            <div class="stat-card">
+              <div class="stat-value">{{ report.total_errors }}</div>
+              <div class="stat-label">Total Errors</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ report.unique_error_types }}</div>
+              <div class="stat-label">Unique Error Types</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="ai-report-errors">
+          <h3>Errors by Type</h3>
+          <div class="error-type-list">
+            <div ng-repeat="errorType in report.errors_by_type" class="error-type-card">
+              <div class="error-type-header">
+                <h4>{{ errorType.error_type }}</h4>
+                <div class="error-type-stats">
+                  <span class="occurrences">{{ errorType.occurrences }} occurrences</span>
+                  <span class="percentage">{{ errorType.percentage }}%</span>
+                </div>
+              </div>
+              
+              <div class="sample-jobs">
+                <h5>Sample Jobs:</h5>
+                <div ng-repeat="job in errorType.sample_jobs" class="sample-job-card">
+                  <div class="job-header">
+                    <a ng-if="job.url" class="job-name job-link" href="{{ job.url }}" target="_blank">{{ job.job }}</a>
+                    <span ng-if="!job.url" class="job-name">{{ job.job }}</span>
+                    <span class="job-result" ng-class="'result-' + job.result.toLowerCase()">{{ job.result }}</span>
+                  </div>
+                  <div class="job-claim" ng-bind-html="job.claim_preview"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

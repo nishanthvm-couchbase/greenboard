@@ -4,15 +4,18 @@
   "description": "functional test qe dashboard",
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "devDependencies": {
-    "grunt": "^0.4.5",
-    "grunt-cli": "^0.1.13",
-    "grunt-contrib-concat": "^0.5.0",
-    "grunt-contrib-uglify": "^0.5.1",
-    "http-server": "^0.6.1",
-    "karma": "^0.12.16",
-    "karma-chrome-launcher": "^0.1.4",
-    "karma-jasmine": "^0.1.5"
+    "grunt": "^1.6.1",
+    "grunt-cli": "^1.5.0",
+    "grunt-contrib-concat": "^2.1.0",
+    "grunt-contrib-uglify": "^5.2.2",
+    "http-server": "^14.1.1",
+    "karma": "^6.4.4",
+    "karma-chrome-launcher": "^3.2.0",
+    "karma-jasmine": "^5.1.0"
   },
   "scripts": {
     "prestart": "grunt default",
@@ -20,8 +23,8 @@
     "test": "node node_modules/karma/bin/karma start test/karma.conf.js"
   },
   "dependencies": {
-    "bower": "^1.4.1",
-    "grunt-contrib-watch": "^0.6.1",
+    "bower": "^1.8.14",
+    "grunt-contrib-watch": "^1.1.0",
     "graceful-fs": "^4.1.11"
   }
 }

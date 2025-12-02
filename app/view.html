@@ -13,6 +13,15 @@
     </div>
     <div class="navbar-collapse collapse">
       <ul class="nav navbar-nav navbar-right">
+        <li style="display: block;">
+          <dark-mode-toggle></dark-mode-toggle>
+        </li>
+        <li>
+          <div class="greenboard-version-badge">
+            <span class="beta-label">BETA</span>
+            <span class="version-text">Greenboard V3 2025</span>
+          </div>
+        </li>
       </ul>
 
     </div>
@@ -32,14 +41,17 @@
         <div class="col-sm-1">
           <target-selector change-target="changeTarget" />
         </div>
-        <div class="col-sm-4 col-sm-push-1">
+        <div class="col-sm-4 col-sm-push-1 nav-group">
           <version-selector change-version="changeVersion" />
+          <label class="nav-group-label">Version</label>
         </div>
-        <div class="col-sm-2 col-sm-push-1">
+        <div class="col-sm-2 col-sm-push-1 nav-group">
           <builds-filter-selector change-buildsFilter="changeBuildsFilter" />
+          <label class="nav-group-label">Builds</label>
         </div>
-        <div class="col-sm-2 col-sm-push-1">
+        <div class="col-sm-2 col-sm-push-1 nav-group">
           <filter-selector change-filter="changeFilter" />
+          <label class="nav-group-label">Tests</label>
         </div>
       </div>
 

@@ -11,7 +11,9 @@ var app = angular.module('greenBoard', [
     'app.target',
     'app.sidebar',
     'app.infobar',
-    'app.compare'
+    'app.compare',
+    'app.darkmode',
+    'app.aireport'
 ]);
 
 app.run(['$location', '$rootScope', 'Data', function($location, $rootScope, Data){
@@ -37,7 +39,7 @@ app.config(['$stateProvider', '$urlRouterProvider',
     function($stateProvider, $urlRouterProvider){
 
         // TODO: external bootstrap with now testing build!
-        $urlRouterProvider.otherwise("/server/7.1.0/latest");
+        $urlRouterProvider.otherwise("/server/8.1.0/latest");
         $stateProvider              
             .state('target', {
                 url: "/:target",

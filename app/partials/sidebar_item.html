@@ -1,5 +1,6 @@
 <div ng-class="bgColor()"  
-	   ng-click="toggleItem()">
+	   ng-click="toggleItem()"
+	   ng-style="{'--percentage': getRunPercentNum()}">
 	<span  class="custom-list-group-item" >
           <a href="">
             <i class="glyphicon" ng-class="glyphiconClass">
@@ -7,6 +8,10 @@
              {{key}}
             <a class="component-analytics" ng-click="$event.stopPropagation()" ng-if="type=='features' && getDashboardUrl()" target="_blank" href="{{getDashboardUrl()}}"><i class="glyphicon glyphicon-stats"></i></a>
           	<span  class="testscore">{{getRunPercent()}}</span>
+            <button class="ai-report-btn" ng-click="openAIReport($event)" ng-if="type=='features'" title="AI Error Analysis Report">
+              <span class="ai-text">AI</span>
+              <i class="glyphicon glyphicon-file"></i>
+            </button>
           </a>
 		<div class="scoredesc">pass: {{getNumOrPerc("passed")}}, fail: {{getNumOrPerc("failed")}} skip: {{getNumOrPerc("skipped")}}
       <span ng-if="asNum()">pend: {{getNumOrPerc("pending")}}  total: {{getNumOrPerc("total")}}</span></div>

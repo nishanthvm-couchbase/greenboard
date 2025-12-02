@@ -325,6 +325,585 @@ angular.module('app.main', [])
                             $scope.selectedbuild = requiredJobs[0].build
                     }
                 
+            // Trend modal handling
+            $scope.trendData = null;
+            $scope.trendLoading = false;
+            $scope.trendJobName = '';
+            $scope.trendBaseVersion = '';
+            $scope.trendChartType = 'scatter'; // 'scatter' or 'bar'
+            
+            $scope.toggleChartType = function() {
+                $scope.trendChartType = $scope.trendChartType === 'scatter' ? 'bar' : 'scatter';
+                if ($scope.trendData && $scope.trendData.trend) {
+                    setTimeout(function() {
+                        if ($scope.trendChartType === 'scatter') {
+                            renderTrendChart($scope.trendData.trend);
+                        } else {
+                            renderBarChart($scope.trendData.trend);
+                        }
+                    }, 100);
+                }
+            };
+            
+            $rootScope.$on('openTrendModal', function(event, data) {
+                $scope.trendData = data.trendData;
+                $scope.trendJobName = data.jobName;
+                $scope.trendBaseVersion = data.baseVersion;
+                $scope.trendLoading = false;
+                $scope.trendChartType = 'scatter'; // Reset to scatter view
+                
+                // Open Bootstrap modal
+                $('#trendModal').modal('show');
+                
+                // Render chart after modal is fully shown
+                $('#trendModal').on('shown.bs.modal', function() {
+                    $scope.$apply(function() {
+                        if ($scope.trendData && $scope.trendData.trend) {
+                            setTimeout(function() {
+                                renderTrendChart($scope.trendData.trend);
+                            }, 100);
+                        }
+                    });
+                });
+                
+                // Also try after a delay as fallback
+                setTimeout(function() {
+                    if ($scope.trendData && $scope.trendData.trend) {
+                        var chartContainer = document.getElementById('trend-chart-container');
+                        if (chartContainer && chartContainer.offsetWidth > 0) {
+                            renderTrendChart($scope.trendData.trend);
+                        }
+                    }
+                }, 500);
+            });
+            
+            // Function to render D3 trend chart - Scatter/Timeline visualization (D3 v3 compatible)
+            function renderTrendChart(trendData) {
+                if (!trendData || trendData.length === 0) {
+                    console.log("No trend data to render");
+                    return;
+                }
+                
+                try {
+                    // Clear previous chart
+                    d3.select("#trend-chart").selectAll("*").remove();
+                    
+                    var margin = {top: 40, right: 30, bottom: 80, left: 60};
+                    var container = document.getElementById('trend-chart-container');
+                    if (!container) {
+                        console.error("Chart container not found");
+                        return;
+                    }
+                    var width = container.offsetWidth - margin.left - margin.right;
+                    var height = 400 - margin.top - margin.bottom;
+                    
+                    if (width <= 0 || height <= 0) {
+                        console.error("Invalid dimensions:", width, height);
+                        return;
+                    }
+                    
+                    var svg = d3.select("#trend-chart")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom);
+                    
+                    var g = svg.append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+                    
+                    // Sort trend data by version and run number
+                    var sortedData = trendData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.run_number - b.run_number;
+                    });
+                    
+                    // Get unique versions for X-axis
+                    var uniqueVersions = [];
+                    sortedData.forEach(function(d) {
+                        if (uniqueVersions.indexOf(d.version) === -1) {
+                            uniqueVersions.push(d.version);
+                        }
+                    });
+                    
+                    // Create scales (D3 v3 syntax)
+                    var xScale = d3.scale.ordinal()
+                        .domain(uniqueVersions)
+                        .rangePoints([0, width], 1);
+                    
+                    var maxRunNumber = d3.max(sortedData, function(d) { return d.run_number; }) || 1;
+                    var yScale = d3.scale.linear()
+                        .domain([0.5, maxRunNumber + 0.5])
+                        .nice()
+                        .range([height, 0]);
+                    
+                    // Color function for pass/fail
+                    var colorScale = function(d) {
+                        return d.result === 'pass' ? '#28a745' : '#dc3545';
+                    };
+                    
+                    // Remove grid lines - cleaner look
+                    
+                    // Group data by version for jittering (so multiple runs per version don't overlap)
+                    var versionGroups = {};
+                    sortedData.forEach(function(d) {
+                        if (!versionGroups[d.version]) {
+                            versionGroups[d.version] = [];
+                        }
+                        versionGroups[d.version].push(d);
+                    });
+                    
+                    // Calculate jitter offset for multiple runs in same version
+                    var jitteredData = [];
+                    uniqueVersions.forEach(function(version) {
+                        var runs = versionGroups[version];
+                        var jitterRange = Math.min(30, width / uniqueVersions.length * 0.3);
+                        runs.forEach(function(d, i) {
+                            var jitter = (runs.length > 1) ? 
+                                ((i - (runs.length - 1) / 2) * (jitterRange / runs.length)) : 0;
+                            jitteredData.push({
+                                data: d,
+                                x: xScale(version) + jitter,
+                                y: yScale(d.run_number)
+                            });
+                        });
+                    });
+                    
+                    // Add circles for each run
+                    var circles = g.selectAll(".run-circle")
+                        .data(jitteredData)
+                        .enter()
+                        .append("circle")
+                        .attr("class", "run-circle")
+                        .attr("cx", function(d) { return d.x; })
+                        .attr("cy", function(d) { return d.y; })
+                        .attr("r", 0)
+                        .attr("fill", function(d) { return colorScale(d.data); })
+                        .attr("stroke", function(d) { 
+                            return d.data.result === 'pass' ? '#1e7e34' : '#a71e2a';
+                        })
+                        .attr("stroke-width", 2)
+                        .attr("opacity", 0.8)
+                        .style("cursor", "pointer");
+                    
+                    // Animate circles appearing
+                    circles.transition()
+                        .duration(800)
+                        .delay(function(d, i) { return i * 30; })
+                        .attr("r", function(d) {
+                            // Larger circles for first runs, smaller for later runs
+                            return 6 + (d.data.run_number === 1 ? 2 : 0);
+                        })
+                        .attr("opacity", 0.9);
+                    
+                    // Add hover effects and tooltips
+                    circles.on("mouseover", function(d) {
+                            d3.select(this)
+                                .transition()
+                                .duration(200)
+                                .attr("r", 10)
+                                .attr("opacity", 1)
+                                .attr("stroke-width", 3);
+                            
+                            var tooltip = d3.select("body").append("div")
+                                .attr("class", "trend-tooltip")
+                                .style("opacity", 0)
+                                .style("position", "absolute")
+                                .style("background", "rgba(0, 0, 0, 0.9)")
+                                .style("color", "#fff")
+                                .style("padding", "10px 14px")
+                                .style("border-radius", "6px")
+                                .style("pointer-events", "none")
+                                .style("font-size", "13px")
+                                .style("z-index", "10001")
+                                .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)");
+                            
+                            var tooltipText = "<strong>" + d.data.result.toUpperCase() + "</strong><br/>" +
+                                             "Version: " + d.data.version + "<br/>" +
+                                             "Run #: " + d.data.run_number;
+                            if (d.data.url) {
+                                tooltipText += "<br/><a href='" + d.data.url + "' target='_blank' style='color: #9b8fff; text-decoration: underline;'>View Job →</a>";
+                            }
+                            tooltip.html(tooltipText);
+                            
+                            tooltip.transition()
+                                .duration(200)
+                                .style("opacity", 1);
+                            
+                            var mousePos = d3.mouse(document.body);
+                            tooltip.style("left", (mousePos[0] + 15) + "px")
+                                   .style("top", (mousePos[1] - 10) + "px");
+                        })
+                        .on("mousemove", function(d) {
+                            var mousePos = d3.mouse(document.body);
+                            d3.select(".trend-tooltip")
+                                .style("left", (mousePos[0] + 15) + "px")
+                                .style("top", (mousePos[1] - 10) + "px");
+                        })
+                        .on("mouseout", function(d) {
+                            d3.select(this)
+                                .transition()
+                                .duration(200)
+                                .attr("r", function(d) {
+                                    return 6 + (d.data.run_number === 1 ? 2 : 0);
+                                })
+                                .attr("opacity", 0.9)
+                                .attr("stroke-width", 2);
+                            d3.selectAll(".trend-tooltip").remove();
+                        });
+                    
+                    // Connect all dots with a trend line (chronological order)
+                    // Sort by version and run number for proper connection order
+                    var connectedData = jitteredData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.data.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.data.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.data.run_number - b.data.run_number;
+                    });
+                    
+                    // Create trend line connecting all points
+                    var trendLine = d3.svg.line()
+                        .x(function(d) { return d.x; })
+                        .y(function(d) { return d.y; })
+                        .interpolate("linear"); // Straight lines
+                    
+                    g.append("path")
+                        .datum(connectedData)
+                        .attr("class", "trend-line")
+                        .attr("d", trendLine)
+                        .attr("fill", "none")
+                        .attr("stroke", "#667EEA")
+                        .attr("stroke-width", 2)
+                        .attr("opacity", 0.6)
+                        .style("pointer-events", "none");
+                    
+                    // Add version lines (vertical lines connecting runs of same version)
+                    uniqueVersions.forEach(function(version) {
+                        var versionRuns = jitteredData.filter(function(d) { return d.data.version === version; });
+                        if (versionRuns.length > 1) {
+                            var lineData = versionRuns.map(function(d) { return [d.x, d.y]; });
+                            var line = d3.svg.line()
+                                .x(function(d) { return d[0]; })
+                                .y(function(d) { return d[1]; })
+                                .interpolate("linear");
+                            
+                            g.append("path")
+                                .datum(lineData)
+                                .attr("class", "version-line")
+                                .attr("d", line)
+                                .attr("fill", "none")
+                                .attr("stroke", "#999")
+                                .attr("stroke-width", 1.5)
+                                .attr("stroke-dasharray", "3,3")
+                                .attr("opacity", 0.5)
+                                .style("pointer-events", "none");
+                        }
+                    });
+                    
+                    // Add X axis (D3 v3 syntax)
+                    var xAxis = d3.svg.axis()
+                        .scale(xScale)
+                        .orient("bottom")
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(xAxis)
+                        .selectAll("text")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "11px")
+                        .attr("dy", ".35em");
+                    
+                    // Add Y axis (D3 v3 syntax)
+                    var yAxis = d3.svg.axis()
+                        .scale(yScale)
+                        .orient("left")
+                        .ticks(Math.min(10, maxRunNumber))
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "y axis")
+                        .call(yAxis);
+                    
+                    // Add axis labels
+                    g.append("text")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", 0 - margin.left)
+                        .attr("x", 0 - (height / 2))
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Run Number");
+                    
+                    g.append("text")
+                        .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Version");
+                    
+                    // Legend is now in HTML, not in SVG
+                    
+                    console.log("Chart rendered successfully");
+                } catch (error) {
+                    console.error("Error rendering chart:", error);
+                }
+            }
+            
+            // Function to render bar chart (D3 v3 compatible)
+            function renderBarChart(trendData) {
+                if (!trendData || trendData.length === 0) {
+                    console.log("No trend data to render");
+                    return;
+                }
+                
+                try {
+                    // Clear previous chart
+                    d3.select("#trend-chart").selectAll("*").remove();
+                    
+                    var margin = {top: 40, right: 30, bottom: 80, left: 60};
+                    var container = document.getElementById('trend-chart-container');
+                    if (!container) {
+                        console.error("Chart container not found");
+                        return;
+                    }
+                    var width = container.offsetWidth - margin.left - margin.right;
+                    var height = 400 - margin.top - margin.bottom;
+                    
+                    if (width <= 0 || height <= 0) {
+                        console.error("Invalid dimensions:", width, height);
+                        return;
+                    }
+                    
+                    var svg = d3.select("#trend-chart")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom);
+                    
+                    var g = svg.append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+                    
+                    // Sort trend data by version and run number
+                    var sortedData = trendData.slice().sort(function(a, b) {
+                        var aVersionNum = parseInt(a.version.split('-')[1] || '0');
+                        var bVersionNum = parseInt(b.version.split('-')[1] || '0');
+                        if (aVersionNum !== bVersionNum) {
+                            return aVersionNum - bVersionNum;
+                        }
+                        return a.run_number - b.run_number;
+                    });
+                    
+                    // Group data by version
+                    var versionGroups = {};
+                    sortedData.forEach(function(d) {
+                        if (!versionGroups[d.version]) {
+                            versionGroups[d.version] = [];
+                        }
+                        versionGroups[d.version].push(d);
+                    });
+                    
+                    // Get unique versions for X-axis
+                    var uniqueVersions = Object.keys(versionGroups).sort(function(a, b) {
+                        var aNum = parseInt(a.split('-')[1] || '0');
+                        var bNum = parseInt(b.split('-')[1] || '0');
+                        return aNum - bNum;
+                    });
+                    
+                    // Create scales (D3 v3 syntax)
+                    var xScale = d3.scale.ordinal()
+                        .domain(uniqueVersions)
+                        .rangeBands([0, width], 0.2);
+                    
+                    var maxRunNumber = d3.max(sortedData, function(d) { return d.run_number; }) || 1;
+                    var yScale = d3.scale.linear()
+                        .domain([0, maxRunNumber])
+                        .nice()
+                        .range([height, 0]);
+                    
+                    // Color function for pass/fail
+                    var colorScale = function(d) {
+                        return d.result === 'pass' ? '#28a745' : '#dc3545';
+                    };
+                    
+                    // Calculate bar width (single bar per version, will be stacked)
+                    var barWidth = xScale.rangeBand() * 0.6;
+                    var barXOffset = (xScale.rangeBand() - barWidth) / 2;
+                    
+                    // Create stacked bars for each version
+                    uniqueVersions.forEach(function(version, versionIndex) {
+                        var runs = versionGroups[version].slice().sort(function(a, b) {
+                            return a.run_number - b.run_number;
+                        });
+                        var versionX = xScale(version) + barXOffset;
+                        
+                        // Calculate cumulative heights for stacking
+                        // Each segment height should represent the run number position
+                        var cumulativeY = height;
+                        var segmentDelay = 0;
+                        var previousRunNumber = 0;
+                        
+                        runs.forEach(function(d, runIndex) {
+                            // Each segment represents one run
+                            // Height is based on the difference between current and previous run number
+                            var currentRunY = yScale(d.run_number);
+                            var previousRunY = runIndex === 0 ? height : yScale(previousRunNumber);
+                            var segmentHeight = previousRunY - currentRunY;
+                            var segmentY = currentRunY;
+                            
+                            // Store previous run number for next iteration
+                            previousRunNumber = d.run_number;
+                            
+                            var segment = g.append("rect")
+                                .attr("class", "trend-bar-segment")
+                                .attr("x", versionX)
+                                .attr("y", cumulativeY)
+                                .attr("width", barWidth)
+                                .attr("height", 0)
+                                .attr("fill", colorScale(d))
+                                .attr("stroke", d.result === 'pass' ? '#1e7e34' : '#a71e2a')
+                                .attr("stroke-width", 2)
+                                .attr("opacity", 0.9)
+                                .style("cursor", "pointer")
+                                .datum({
+                                    data: d,
+                                    runIndex: runIndex,
+                                    totalRuns: runs.length
+                                }); // Store data for tooltip
+                            
+                            // Animate segments appearing from bottom to top
+                            segment.transition()
+                                .duration(400)
+                                .delay(versionIndex * 150 + segmentDelay)
+                                .attr("y", segmentY)
+                                .attr("height", segmentHeight)
+                                .attr("opacity", 0.9);
+                            
+                            segmentDelay += 80;
+                            cumulativeY = segmentY;
+                            
+                            // Add hover effects and tooltips for each segment
+                            segment.on("mouseover", function(d) {
+                                    d3.select(this)
+                                        .transition()
+                                        .duration(200)
+                                        .attr("opacity", 1)
+                                        .attr("stroke-width", 4)
+                                        .attr("stroke", "#fff");
+                                    
+                                    var tooltip = d3.select("body").append("div")
+                                        .attr("class", "trend-tooltip")
+                                        .style("opacity", 0)
+                                        .style("position", "absolute")
+                                        .style("background", "rgba(0, 0, 0, 0.9)")
+                                        .style("color", "#fff")
+                                        .style("padding", "10px 14px")
+                                        .style("border-radius", "6px")
+                                        .style("pointer-events", "none")
+                                        .style("font-size", "13px")
+                                        .style("z-index", "10001")
+                                        .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)");
+                                    
+                                    var tooltipText = "<strong>" + d.data.result.toUpperCase() + "</strong><br/>" +
+                                                     "Version: " + d.data.version + "<br/>" +
+                                                     "Run #: " + d.data.run_number + " of " + d.totalRuns;
+                                    if (d.data.url) {
+                                        tooltipText += "<br/><a href='" + d.data.url + "' target='_blank' style='color: #9b8fff; text-decoration: underline;'>View Job →</a>";
+                                    }
+                                    tooltip.html(tooltipText);
+                                    
+                                    tooltip.transition()
+                                        .duration(200)
+                                        .style("opacity", 1);
+                                    
+                                    var mousePos = d3.mouse(document.body);
+                                    tooltip.style("left", (mousePos[0] + 15) + "px")
+                                           .style("top", (mousePos[1] - 10) + "px");
+                                })
+                                .on("mousemove", function(d) {
+                                    var mousePos = d3.mouse(document.body);
+                                    d3.select(".trend-tooltip")
+                                        .style("left", (mousePos[0] + 15) + "px")
+                                        .style("top", (mousePos[1] - 10) + "px");
+                                })
+                                .on("mouseout", function(d) {
+                                    d3.select(this)
+                                        .transition()
+                                        .duration(200)
+                                        .attr("opacity", 0.9)
+                                        .attr("stroke-width", 2)
+                                        .attr("stroke", function() {
+                                            var result = d.data.result;
+                                            return result === 'pass' ? '#1e7e34' : '#a71e2a';
+                                        });
+                                    d3.selectAll(".trend-tooltip").remove();
+                                });
+                        });
+                    });
+                    
+                    // Add X axis (D3 v3 syntax)
+                    var xAxis = d3.svg.axis()
+                        .scale(xScale)
+                        .orient("bottom")
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(xAxis)
+                        .selectAll("text")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "11px")
+                        .attr("dy", ".35em");
+                    
+                    // Add Y axis (D3 v3 syntax)
+                    var yAxis = d3.svg.axis()
+                        .scale(yScale)
+                        .orient("left")
+                        .ticks(Math.min(10, maxRunNumber))
+                        .tickSize(6)
+                        .tickPadding(8);
+                    
+                    g.append("g")
+                        .attr("class", "y axis")
+                        .call(yAxis);
+                    
+                    // Add axis labels
+                    g.append("text")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", 0 - margin.left)
+                        .attr("x", 0 - (height / 2))
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Run Number");
+                    
+                    g.append("text")
+                        .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
+                        .style("text-anchor", "middle")
+                        .style("font-size", "13px")
+                        .style("font-weight", "600")
+                        .style("fill", "#333")
+                        .text("Version");
+                    
+                    // Legend is now in HTML, not in SVG
+                    
+                    console.log("Bar chart rendered successfully");
+                } catch (error) {
+                    console.error("Error rendering bar chart:", error);
+                }
+            }
+            
             $scope.search = ""
             $scope.onSearchChange = function() {
                 jobs = Data.getActiveJobs()
@@ -358,6 +937,7 @@ angular.module('app.main', [])
                 var jobsSuccess = _.uniq(_.filter(jobs, ["result", "SUCCESS"]))
                 var jobsAborted = _.uniq(_.filter(jobs, ["result", "ABORTED"]))
                 var jobsUnstable = _.uniq(_.filter(jobs, ["result", "UNSTABLE"]))
+                var jobsInstallFailed = _.uniq(_.filter(jobs, ["result", "INST_FAIL"]))
                 var jobsFailed = _.uniq(_.filter(jobs, ["result", "FAILURE"]))
                 var jobsPending = _.uniq(_.filter(jobs, ["result", "PENDING"]))
                 var jobsSkip = _.uniq(_.filter(jobs, function(job) { return job["skipCount"] > 0 }))
@@ -369,6 +949,7 @@ angular.module('app.main', [])
                     {title: "Jobs Aborted", jobs: jobsAborted},
                     {title: "Jobs Unstable", jobs: jobsUnstable},
                     {title: "Jobs Failed", jobs: jobsFailed},
+                    {title: "Jobs Install Failed", jobs: jobsInstallFailed},
                     {title: "Jobs Skipped", jobs: jobsSkip},
                     {title: "Jobs Pending", jobs: jobsPending},
                 ]                
@@ -595,21 +1176,34 @@ angular.module('app.main', [])
         return {
             scope: {claim: "="},
             templateUrl: "partials/claim.html",
-            link: function(scope) {
+            link: function(scope, element) {
                 var jobName = scope.$parent.job.name;
                 scope.formatClaim = formatClaim
                 var linesToShow = 50;
                 scope.shortClaim = (scope.claim.length < linesToShow) ? scope.claim : scope.claim.split('<br><br>')[0].slice(0, linesToShow) + '...'
+                
+                // Find the parent td element
+                var parentTd = element.parent();
+                while (parentTd.length && parentTd[0].tagName !== 'TD') {
+                    parentTd = parentTd.parent();
+                }
+                
                 scope.scope = {
                     showFullClaim: scope.$parent.$parent.openClaims.has(jobName),
                     changeShowFullClaim: function() {
                         if (this.showFullClaim) {
                             scope.$parent.$parent.openClaims.delete(jobName)
+                            if (parentTd.length) parentTd.removeClass('claim-expanded')
                         } else {
                             scope.$parent.$parent.openClaims.add(jobName)
+                            if (parentTd.length) parentTd.addClass('claim-expanded')
                         }
                         this.showFullClaim = !this.showFullClaim
                     }
+                }
+                // Set initial state
+                if (scope.scope.showFullClaim && parentTd.length) {
+                    parentTd.addClass('claim-expanded')
                 }
             }
         }
@@ -731,6 +1325,55 @@ angular.module('app.main', [])
         }
 
     }])
+    .directive('trendButton', ['QueryService', '$rootScope', function(QueryService, $rootScope){
+        return {
+            restrict: 'E',
+            scope: {job: "=", build: "="},
+            templateUrl: 'partials/trend_button.html',
+            link: function(scope, elem, attrs){
+                scope.loading = false;
+                scope.error = false;
+                
+                scope.openTrend = function() {
+                    if (scope.loading) return;
+                    
+                    // Extract base version from build (e.g., "8.1.0-1228" -> "8.1.0")
+                    var baseVersion = scope.build ? scope.build.split('-')[0] : '';
+                    if (!baseVersion || !scope.job) {
+                        alert("Unable to determine base version or job information");
+                        return;
+                    }
+                    
+                    // Construct document ID: baseVersion_OS_COMPONENT_jobName
+                    var docId = baseVersion + '_' + scope.job.os + '_' + scope.job.component + '_' + scope.job.name;
+                    
+                    scope.loading = true;
+                    scope.error = false;
+                    
+                    QueryService.getTrend(docId)
+                        .then(function(trendData) {
+                            scope.loading = false;
+                            if (trendData) {
+                                // Broadcast event to open trend modal
+                                $rootScope.$broadcast('openTrendModal', {
+                                    trendData: trendData,
+                                    jobName: scope.job.displayName || scope.job.name,
+                                    baseVersion: baseVersion
+                                });
+                            } else {
+                                alert("No trend data found for this job");
+                            }
+                        })
+                        .catch(function(e) {
+                            scope.loading = false;
+                            scope.error = true;
+                            var errorMsg = e.data && e.data.error ? e.data.error : "Failed to fetch trend data";
+                            alert(errorMsg);
+                        });
+                };
+            }
+        }
+    }])
     .directive('rerunButton', ['QueryService', function(QueryService){
         return {
             restrict: 'E',
@@ -740,7 +1383,19 @@ angular.module('app.main', [])
                 scope.submitting = false;
                 scope.error = false;
                 scope.dispatched = false;
+                
+                // Check if rerun should be disabled based on run count
+                scope.isRerunDisabled = function() {
+                    return scope.job.runCount && scope.job.runCount > 2;
+                };
+                
                 scope.rerunJob = function() {
+                    // Prevent rerun if disabled due to run count
+                    if (scope.isRerunDisabled()) {
+                        alert("Rerun disabled: Job has more than 3 runs (" + scope.job.runCount + " runs)");
+                        return;
+                    }
+                    
                     if (!confirm("Rerun " + scope.job.name + "?")) {
                         return;
                     }
@@ -761,6 +1416,9 @@ angular.module('app.main', [])
                         })
                 }
                 scope.btnText = function() {
+                    if (scope.isRerunDisabled()) {
+                        return "Max runs reached";
+                    }
                     if (scope.error) {
                         return "Error dispatching";
                     }

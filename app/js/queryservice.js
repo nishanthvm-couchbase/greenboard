@@ -47,6 +47,32 @@ angular.module('svc.query', [])
 			},
 			rerunJob: function(jobUrl, cherryPick) {
 				return $http.post("rerunJob", { cherryPick: cherryPick, jobUrl: jobUrl })
+			},
+			getReport: function(version, component) {
+				var url = ["report", version, component].join("/")
+				return $http({"url": url})
+					.then(function(response) {
+						return response.data
+					})
+					.catch(function(error) {
+						if (error.status === 404) {
+							return null; // Report not found
+						}
+						throw error;
+					})
+			},
+			getTrend: function(docId) {
+				var url = ["trend", docId].join("/")
+				return $http({"url": url})
+					.then(function(response) {
+						return response.data
+					})
+					.catch(function(error) {
+						if (error.status === 404) {
+							return null; // Trend data not found
+						}
+						throw error;
+					})
 			}
 		  }
 		}])

@@ -1,61 +1,90 @@
 <div class="row">
   <div class="col-sm-12">
-    <h2>Analysis <button ng-if="totalClaims" class="btn btn-default" ng-click="changeShowAnalysis()">{{ showAnalysis ? "-": "+"}}</button></h2>
-    <p ng-if="!totalClaims">No analysis found</p>
-    <div ng-if="showAnalysis && totalClaims">
-      <p class="claim-count">Analyzed jobs: {{totalClaims}} / {{needToAnalyseCount}} ({{analysedPercent}}%)</p>
-      <p class="claim-count" ng-repeat="prefix in jiraCounts">{{prefix.name}}: {{prefix.unique}}, {{prefix.count}}/{{totalClaims}} ({{prefix.percent}}%)</p>
-      <div class="claim-summary">
-        <table class="table table-striped">
-          <thead>
-              <tr>
-                <th>Failure</th>
-                <th>Jobs</th>
-                <th>Failed Tests</th>
-                <th>Skipped Tests</th>
-                <th>Total Tests</th>
-              </tr>
-          </thead>
-          <tbody>
-              <tr ng-repeat="claim in claimSummary | orderBy:'skippedTestCount + failedTestCount':true">
-              <td><span ng-bind-html="formatClaim(claim.claim)"></span> <a ng-click="searchClaim(claim.claim)" href=""><i class="glyphicon" ng-class="{'glyphicon-unchecked': claim.claim !== search, 'glyphicon-check': claim.claim===search}"></i></a></td>
-              <td>{{claim.jobCount}}</td>
-              <td>{{claim.failedTestCount}}</td>
-              <td>{{claim.skippedTestCount}}</td>
-              <td>{{claim.skippedTestCount + claim.failedTestCount}}</td>
-              </tr>
-          </tbody>
-        </table>
+    <div class="analysis-card">
+      <div class="analysis-header" ng-click="changeShowAnalysis()">
+        <h2 class="analysis-title">Analysis</h2>
+        <button ng-if="totalClaims" class="analysis-toggle-btn" ng-click="changeShowAnalysis(); $event.stopPropagation()">
+          <i class="glyphicon" ng-class="{'glyphicon-chevron-up': showAnalysis, 'glyphicon-chevron-down': !showAnalysis}"></i>
+        </button>
+      </div>
+      <p ng-if="!totalClaims" class="analysis-empty">No analysis found</p>
+      <div ng-if="showAnalysis && totalClaims" class="analysis-content">
+        <div class="analysis-stats">
+          <div class="analysis-stat-item">
+            <span class="stat-label">Analyzed jobs:</span>
+            <span class="stat-value">{{totalClaims}} / {{needToAnalyseCount}} <span class="stat-percent">({{analysedPercent}}%)</span></span>
+          </div>
+          <div class="analysis-stat-item" ng-repeat="prefix in jiraCounts">
+            <span class="stat-label">{{prefix.name}}:</span>
+            <span class="stat-value">{{prefix.unique}}, {{prefix.count}}/{{totalClaims}} <span class="stat-percent">({{prefix.percent}}%)</span></span>
+          </div>
+        </div>
+        <div class="claim-summary">
+          <h3 class="failure-heading">Failure</h3>
+          <div class="table-wrapper">
+            <table class="analysis-table">
+              <thead>
+                  <tr>
+                    <th>Failure</th>
+                    <th>Jobs</th>
+                    <th>Failed Tests</th>
+                    <th>Skipped Tests</th>
+                    <th>Total Tests</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <tr ng-repeat="claim in claimSummary | orderBy:'skippedTestCount + failedTestCount':true">
+                  <td class="failure-cell">
+                    <span ng-bind-html="formatClaim(claim.claim)"></span>
+                    <a ng-click="searchClaim(claim.claim)" href="" class="failure-filter-btn">
+                      <i class="glyphicon" ng-class="{'glyphicon-unchecked': claim.claim !== search, 'glyphicon-check': claim.claim===search}"></i>
+                    </a>
+                  </td>
+                  <td>{{claim.jobCount}}</td>
+                  <td>{{claim.failedTestCount}}</td>
+                  <td>{{claim.skippedTestCount}}</td>
+                  <td>{{claim.skippedTestCount + claim.failedTestCount}}</td>
+                  </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
-    <h2>Jobs</h2>
-    <div class="form-group">
-      <input type="text" class="form-control" id="search" placeholder="Search name, bugs and triage..." ng-model-options='{ debounce: 500 }' ng-model="search" ng-change="onSearchChange()">
-    </div>
-    <pagination></pagination>
-    <!-- Nav tabs -->
-    <ul class="nav nav-tabs" role="tablist" id="jobTabs">
-        <li ng-click="changePanelJobs($index)"
-            ng-repeat="tab in panelTabs" 
-            class="job-panel-tab"
-            ng-class="{active: tab.active}">
-              <a role="tab" data-toggle="tab"><h4>{{tab.jobs.length}} {{tab.title}}</h4></a>
-        </li>
-
-    </ul>
-    <div class="tab-content">
-      <div class="tab-pane active" id="executed">
-        <div class="table-responsive">
-            <table class="jobs-table table table-striped">
+    <div class="jobs-card">
+      <div class="jobs-header">
+        <h2 class="jobs-title">Jobs</h2>
+      </div>
+      <div class="jobs-content">
+        <div class="jobs-search-wrapper">
+          <input type="text" class="jobs-search-input" id="search" placeholder="Search name, bugs and triage..." ng-model-options='{ debounce: 500 }' ng-model="search" ng-change="onSearchChange()">
+        </div>
+        <pagination></pagination>
+        <!-- Nav tabs -->
+        <div class="jobs-tabs-wrapper">
+          <ul class="jobs-tabs" role="tablist" id="jobTabs">
+            <li ng-click="changePanelJobs($index)"
+                ng-repeat="tab in panelTabs" 
+                class="job-panel-tab"
+                ng-class="{active: tab.active}">
+                  <a role="tab" data-toggle="tab">{{tab.jobs.length}} {{tab.title}}</a>
+            </li>
+          </ul>
+        </div>
+        <div class="tab-content">
+          <div class="tab-pane active" id="executed">
+            <div class="jobs-table-wrapper">
+              <table class="jobs-table">
               <thead>
                 <tr>
                   <th><a href="" ng-click="predicate = 'displayName'; reverse=!reverse">Name  <i class="fa fa-sort"></i></a></th>
+                  <th><a href="" ng-click="">Trend</a></th>
                   <th ng-show="panelTabs[activePanel].title!=='Jobs Pending'" ng-repeat="variant in variantNames"><a href="" ng-click="$parent.predicate = 'variants.'+variant; $parent.reverse=!$parent.reverse">{{ variantName(variant) }}</a></th>
                   <th><a href="" ng-click="">Rerun</a></th>
                   <th><a href="" ng-click="predicate = 'result'; reverse=!reverse">Result</a></th>
                   <th ng-if="panelTabs[activePanel].jobs[0].cp_version!==undefined"><a href="" ng-click="predicate = 'cp_version'; reverse=!reverse">CP Version</a></th>
                   <th><a href="" ng-click="predicate = 'totalCount - failCount - skipCount'; reverse=!reverse">Passed</a></th>
-                  <th><a href="" ng-click="predicate = 'skipCount || 0'; reverse=!reverse">Skipped</a></th>
+                  <th><a href="" ng-click="predicate = 'failCount || 0'; reverse=!reverse">Failed</a></th>
                   <th><a href="" ng-click="predicate = 'pending || totalCount'; reverse=!reverse">Total</a></th>
                   <th><a href="" ng-click="predicate = 'totalDuration || 0'; reverse=!reverse">Duration</a></th>
                   <th><a href="" ng-click="predicate = 'timestamp || 0'; reverse=!reverse">Run Date (UTC)</a></th>
@@ -68,12 +97,13 @@
               <tbody>
                 <tr ng-repeat="job in panelTabs[activePanel].jobs | orderBy:predicate:reverse | limitTo:jobsPerPage:(jobsPage*jobsPerPage)">
                   <td id="job-name"><a style="cursor:pointer;" ng-click="onselect(job.name,job.os,job.component,job.variants)" data-toggle="modal" data-target="#exampleModalCenter">{{job.displayName}}</a></td>
+                  <td><trend-button job="job" build="job.build"></trend-button></td>
                   <td ng-show="job.result!=='PENDING'" ng-repeat="variant in variantNames">{{ job.variants[variant] }}</td>
                   <td><rerun-button ng-if="job.pending===undefined&&job.result!='SUCCESS'&&job.url.includes('test_suite_executor')" job="job"></rerun-button></td>
                   <td><span class={{job.result}}>{{job.result}}</span></td>
                   <td ng-if="job.cp_version!==undefined">{{job.cp_version}}</td>
                   <td>{{job.totalCount - job.failCount - job.skipCount}}</td>
-                  <td>{{job.skipCount}}</td>
+                  <td>{{job.failCount}}</td>
                   <td>{{job.pending || job.totalCount}}</td>
                   <td>{{msToTime(job.totalDuration)}}</td>
                   <td>{{msToDate(job.timestamp)}}</td>
@@ -83,9 +113,11 @@
                   <td><claim-test jobName="job.name" claim="job.claim"></claim></td>
                 </tr>
               </tbody>
-            </table>
+              </table>
+            </div>
+            <pagination></pagination>
+          </div>
         </div>
-        <pagination></pagination>
       </div>
     </div>
 </div>
@@ -110,9 +142,9 @@
                   <th scope="col" class="text-center">#</th>
                   <th scope="col" class="text-center">Job Url</th>
                   <th scope="col" class="text-center">Result</th>
-                  <th ng-ig="selectedjobdetails[0].cp_version!==undefined" scope="col" class="text-center">CP Version</th>
+                  <th ng-if="selectedjobdetails[0].cp_version!==undefined" scope="col" class="text-center">CP Version</th>
                   <th scope="col" class="text-center">Passed Count</th>
-                  <th scope="col" class="text-center">Skipped</th>
+                  <th scope="col" class="text-center">Failed Count</th>
                   <th scope="col" class="text-center">Total Count</th>
                   <th scope="col" class="text-center">Duration</th>
                   <th scope="col" class="text-center">Run Date (UTC)</th>
@@ -129,7 +161,7 @@
                   <td><span class={{selectedjob.result}}>{{selectedjob.result}}</span></td>
                   <td ng-if="selectedjob.cp_version!==undefined">{{selectedjob.cp_version}}</td>
                   <td>{{selectedjob.totalCount - selectedjob.failCount - selectedjob.skipCount}}</td>
-                  <td>{{selectedjob.skipCount}}</td>
+                  <td>{{selectedjob.failCount}}</td>
                   <td>{{selectedjob.totalCount}}</td>
                   <td>{{msToTime(selectedjob.duration)}}</td>
                   <td>{{msToDate(selectedjob.timestamp)}}</td>
@@ -146,6 +178,95 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
         <!-- <button type="button" class="btn btn-secondary">Close</button> -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<ai-report-modal></ai-report-modal>
+
+<!-- Trend Modal -->
+<div class="modal fade" id="trendModal" tabindex="-1" role="dialog" aria-labelledby="trendModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document" style="max-width: 90%;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h2 class="modal-title text-center" id="trendModalTitle">Job Trend: {{trendJobName}}</h2>
+        <h3 class="modal-title text-center">Base Version: <b>{{trendBaseVersion}}</b></h3>
+      </div>
+      <div class="modal-body">
+        <div ng-if="trendLoading" class="text-center" style="padding: 40px;">
+          <i class="glyphicon glyphicon-refresh" style="font-size: 32px; animation: spin 1s linear infinite;"></i>
+          <p>Loading trend data...</p>
+        </div>
+        <div ng-if="!trendLoading && trendData">
+          <!-- Last Pass Details -->
+          <div class="last-pass-section" ng-if="trendData.last_pass">
+            <h4 class="last-pass-title">Last Pass Details</h4>
+            <div class="last-pass-info">
+              <p><strong>Version:</strong> {{trendData.last_pass.version}}</p>
+              <p><strong>Run Number:</strong> {{trendData.last_pass.run_number}}</p>
+              <p ng-if="trendData.last_pass.url">
+                <strong>URL:</strong> <a href="{{trendData.last_pass.url}}" target="_blank">{{trendData.last_pass.url}}</a>
+              </p>
+            </div>
+          </div>
+          
+          <!-- Summary Stats -->
+          <div class="trend-summary">
+            <div class="trend-stat">
+              <span class="trend-stat-label">Total Runs:</span>
+              <span class="trend-stat-value">{{trendData.total_runs || 0}}</span>
+            </div>
+            <div class="trend-stat">
+              <span class="trend-stat-label">Pass Count:</span>
+              <span class="trend-stat-value trend-pass">{{trendData.pass_count || 0}}</span>
+            </div>
+            <div class="trend-stat">
+              <span class="trend-stat-label">Fail Count:</span>
+              <span class="trend-stat-value trend-fail">{{trendData.fail_count || 0}}</span>
+            </div>
+          </div>
+          
+          <!-- Chart Type Toggle with Legend -->
+          <div style="margin-top: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div class="btn-group" role="group" style="margin: 0 auto;">
+              <button type="button" class="btn btn-sm" 
+                      ng-class="{'btn-primary': trendChartType === 'scatter', 'btn-default': trendChartType !== 'scatter'}"
+                      ng-click="toggleChartType()">
+                <i class="glyphicon glyphicon-dashboard"></i> Scatter
+              </button>
+              <button type="button" class="btn btn-sm"
+                      ng-class="{'btn-primary': trendChartType === 'bar', 'btn-default': trendChartType !== 'bar'}"
+                      ng-click="toggleChartType()">
+                <i class="glyphicon glyphicon-signal"></i> Bar
+              </button>
+            </div>
+            <div class="trend-legend" style="display: flex; gap: 20px; align-items: center; margin: 0 auto;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="width: 15px; height: 15px; background: #28a745; border: 2px solid #1e7e34; border-radius: 2px;"></div>
+                <span style="font-size: 12px; font-weight: 500; color: #333;">Pass</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="width: 15px; height: 15px; background: #dc3545; border: 2px solid #a71e2a; border-radius: 2px;"></div>
+                <span style="font-size: 12px; font-weight: 500; color: #333;">Fail</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Trend Chart -->
+          <div id="trend-chart-container" style="margin-top: 10px;">
+            <svg id="trend-chart"></svg>
+          </div>
+        </div>
+        <div ng-if="!trendLoading && !trendData" class="text-center" style="padding: 40px;">
+          <p>No trend data available for this job.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
