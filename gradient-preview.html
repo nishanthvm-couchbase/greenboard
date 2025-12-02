@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradient Theme Preview</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+        }
+        .gradient-option {
+            margin-bottom: 40px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .gradient-header {
+            padding: 20px;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .gradient-info {
+            padding: 20px;
+        }
+        .gradient-info h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .gradient-info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .color-codes {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        /* Option 1: Blue/Teal (Current) */
+        .option1 .gradient-header {
+            background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
+        }
+        
+        /* Option 2: Teal/Cyan */
+        .option2 .gradient-header {
+            background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+        }
+        
+        /* Option 3: Purple/Indigo */
+        .option3 .gradient-header {
+            background: linear-gradient(135deg, #6C5CE7 0%, #5A4FCF 100%);
+        }
+        
+        /* Option 4: Indigo to Purple */
+        .option4 .gradient-header {
+            background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+        }
+        
+        /* Option 5: Dark Gray/Charcoal */
+        .option5 .gradient-header {
+            background: linear-gradient(135deg, #4A5568 0%, #2D3748 100%);
+        }
+        
+        /* Option 6: Green/Teal */
+        .option6 .gradient-header {
+            background: linear-gradient(135deg, #48BB78 0%, #38A169 100%);
+        }
+        
+        /* Option 7: Deep Blue */
+        .option7 .gradient-header {
+            background: linear-gradient(135deg, #3182CE 0%, #2C5282 100%);
+        }
+        
+        /* Option 8: Slate Blue */
+        .option8 .gradient-header {
+            background: linear-gradient(135deg, #5B6E91 0%, #4A5568 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gradient Theme Options</h1>
+        
+        <div class="gradient-option option1">
+            <div class="gradient-header">Option 1: Blue/Teal (Current)</div>
+            <div class="gradient-info">
+                <h3>Professional Blue</h3>
+                <p>Clean, professional, and trustworthy. Works well with status colors.</p>
+                <div class="color-codes">#4A90E2 → #357ABD</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option2">
+            <div class="gradient-header">Option 2: Teal/Cyan</div>
+            <div class="gradient-info">
+                <h3>Modern Teal</h3>
+                <p>Fresh and modern, tech-focused. Distinctive without being overwhelming.</p>
+                <div class="color-codes">#00BCD4 → #0097A7</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option3">
+            <div class="gradient-header">Option 3: Purple/Indigo</div>
+            <div class="gradient-info">
+                <h3>Vibrant Purple</h3>
+                <p>Creative and modern. Stands out while maintaining professionalism.</p>
+                <div class="color-codes">#6C5CE7 → #5A4FCF</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option4">
+            <div class="gradient-header">Option 4: Indigo to Purple</div>
+            <div class="gradient-info">
+                <h3>Sophisticated Indigo</h3>
+                <p>Elegant gradient from indigo to purple. Modern and distinctive.</p>
+                <div class="color-codes">#667EEA → #764BA2</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option5">
+            <div class="gradient-header">Option 5: Dark Gray/Charcoal</div>
+            <div class="gradient-info">
+                <h3>Professional Charcoal</h3>
+                <p>Sophisticated and neutral. Doesn't compete with status colors.</p>
+                <div class="color-codes">#4A5568 → #2D3748</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option6">
+            <div class="gradient-header">Option 6: Green/Teal</div>
+            <div class="gradient-info">
+                <h3>Positive Green</h3>
+                <p>Positive and fresh. Note: May blend with success indicators.</p>
+                <div class="color-codes">#48BB78 → #38A169</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option7">
+            <div class="gradient-header">Option 7: Deep Blue</div>
+            <div class="gradient-info">
+                <h3>Deep Professional Blue</h3>
+                <p>Darker, more serious blue. Very professional and trustworthy.</p>
+                <div class="color-codes">#3182CE → #2C5282</div>
+            </div>
+        </div>
+        
+        <div class="gradient-option option8">
+            <div class="gradient-header">Option 8: Slate Blue</div>
+            <div class="gradient-info">
+                <h3>Muted Slate Blue</h3>
+                <p>Subtle blue-gray. Professional and understated.</p>
+                <div class="color-codes">#5B6E91 → #4A5568</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
