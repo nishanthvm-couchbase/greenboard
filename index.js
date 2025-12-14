@@ -13,6 +13,11 @@ var app = express();
 app.use(express.static('app'));
 app.use(bodyParser.json());
 
+// Serve release notes page
+app.get('/release-notes', function(req, res) {
+    res.sendFile(path.join(__dirname, 'app', 'release-notes.html'));
+});
+
 // Initialize client (async)
 let client = null;
 (async () => {
@@ -280,6 +285,10 @@ app.get("/report/:version/:component", function (req, res) {
 			res.status(500).send({ error: err.message || 'Failed to fetch report' });
 		})
 })
+
+app.get('/release-notes', function(req, res) {
+	res.sendFile(path.join(__dirname, 'app', 'release-notes.html'));
+});
 
 var server = app.listen(config.httpPort, config.httpListen, function () {
   var addr = server.address();

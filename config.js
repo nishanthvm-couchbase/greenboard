@@ -1,12 +1,12 @@
-exports.Cluster = '172.23.219.72'
+exports.Cluster = '172.23.120.87'
 exports.RBACUser = "Administrator";
 exports.RBACKPassword = "esabhcuoc";
 exports.DefaultBucket = 'test_eventing'
 exports.AuthPassword = ''
 // exports.Buckets = ['server', 'sdk', 'mobile']
 exports.Buckets = []
-exports.httpListen = '127.0.0.1'
+exports.httpListen = '172.23.120.87'
 exports.httpPort = 80
 exports.httpsPort = 443
-exports.Certificate = '/Users/nishanth.vm/Documents/gb_upgrade/try/greenboard/certs/ano.pem'
-exports.PrivateKey = '/Users/nishanth.vm/Documents/gb_upgrade/try/greenboard/certs/key.pem'
+exports.Certificate = '/root/certs/wildcard.sc.couchbase.com-2025/e2462cad8794b9b0.pem'
+exports.PrivateKey = '/root/certs/wildcard.sc.couchbase.com-2025/privatekey.pem'

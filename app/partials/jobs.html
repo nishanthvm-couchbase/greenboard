@@ -123,24 +123,23 @@
 </div>
 
 <div class="modal fade bd-example-modal-lg" id="exampleModalCenter" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document" style="max-width: 85%;">
     <div class="modal-content">
       <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="modal-close-btn" data-dismiss="modal" aria-label="Close">&times;</button>
         <h2 class="modal-title text-center" id="exampleModalCenterTitle">All Test Runs</h2>
         <h3 class="modal-title text-center" id="exampleModalCenter"> Job Name : <b>{{selectedjobname}} </b> Build : <b> {{selectedbuild}} </b> </h3>
       </div>
       <div class="modal-body">
         <!-- <div class="container text-center"> -->
           <div class="table-responsive">
-          <table class="table-striped table-bordered table-condensed table-hover text-center" style="width:80%; margin:0 10%;">
+          <table class="table-striped table-bordered table-condensed table-hover text-center" style="width:100%;">
               <thead class="thead-dark">
                 <tr>
                   <th scope="col" class="text-center">Best Run</th>
                   <th scope="col" class="text-center">#</th>
                   <th scope="col" class="text-center">Job Url</th>
+                  <th scope="col" class="text-center">S3 Link</th>
                   <th scope="col" class="text-center">Result</th>
                   <th ng-if="selectedjobdetails[0].cp_version!==undefined" scope="col" class="text-center">CP Version</th>
                   <th scope="col" class="text-center">Passed Count</th>
@@ -158,6 +157,12 @@
                       <a href="{{selectedjob.url}}{{selectedjob.build_id}}" target="_blank" >
                           Link
                       </a></td>
+                  <td>
+                      <a ng-if="getS3Link(selectedjob, selectedbuild)" href="{{getS3Link(selectedjob, selectedbuild)}}" target="_blank">
+                          Link
+                      </a>
+                      <span ng-if="!getS3Link(selectedjob, selectedbuild)">-</span>
+                  </td>
                   <td><span class={{selectedjob.result}}>{{selectedjob.result}}</span></td>
                   <td ng-if="selectedjob.cp_version!==undefined">{{selectedjob.cp_version}}</td>
                   <td>{{selectedjob.totalCount - selectedjob.failCount - selectedjob.skipCount}}</td>
@@ -168,7 +173,7 @@
                 </tr>
               </tbody>
               <tr>
-                <th class="text-right" colspan="7">Total Duration</td>
+                <th class="text-right" colspan="8">Total Duration</td>
                 <td colspan="8" class="text-center">{{ msToTime(selectedjobdetails[0].totalDuration) }}</td>
               </tr>
             </table>
@@ -244,14 +249,14 @@
                 <i class="glyphicon glyphicon-signal"></i> Bar
               </button>
             </div>
-            <div class="trend-legend" style="display: flex; gap: 20px; align-items: center; margin: 0 auto;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <div style="width: 15px; height: 15px; background: #28a745; border: 2px solid #1e7e34; border-radius: 2px;"></div>
-                <span style="font-size: 12px; font-weight: 500; color: #333;">Pass</span>
+            <div class="trend-legend">
+              <div class="trend-legend-item">
+                <div class="trend-legend-color trend-legend-pass"></div>
+                <span class="trend-legend-text">Pass</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <div style="width: 15px; height: 15px; background: #dc3545; border: 2px solid #a71e2a; border-radius: 2px;"></div>
-                <span style="font-size: 12px; font-weight: 500; color: #333;">Fail</span>
+              <div class="trend-legend-item">
+                <div class="trend-legend-color trend-legend-fail"></div>
+                <span class="trend-legend-text">Fail</span>
               </div>
             </div>
           </div>

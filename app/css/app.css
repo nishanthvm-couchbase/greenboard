@@ -35,6 +35,48 @@ body {
   border: 0;
 }
 
+/* Release Notes Nav Link */
+.navbar .nav > li.release-notes-nav {
+  display: flex;
+  align-items: center;
+  margin-right: 50px;
+}
+
+.navbar .nav > li.release-notes-nav > a.release-notes-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 14px !important;
+  margin: 10px 8px !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  background: rgba(139, 92, 246, 0.25) !important;
+  border: 1px solid rgba(139, 92, 246, 0.5) !important;
+  border-radius: 20px !important;
+  transition: all 0.2s ease !important;
+  line-height: 1.4 !important;
+}
+
+.navbar .nav > li.release-notes-nav > a.release-notes-link:hover,
+.navbar .nav > li.release-notes-nav > a.release-notes-link:focus {
+  background: rgba(139, 92, 246, 0.4) !important;
+  border-color: rgba(139, 92, 246, 0.7) !important;
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+.release-notes-badge {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  color: #ffffff !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  letter-spacing: 0.5px !important;
+}
+
 /* Greenboard Version Badge */
 .greenboard-version-badge {
   display: flex;
@@ -427,6 +469,33 @@ body {
   background: #ffffff;
   margin: 0;
   table-layout: auto;
+}
+
+/* Ensure jobs section fills available width */
+.col-sm-12 > .jobs-card {
+  width: 100%;
+}
+
+.jobs-content {
+  width: 100%;
+}
+
+.tab-content {
+  width: 100%;
+}
+
+.tab-pane {
+  width: 100%;
+}
+
+/* Make table stretch to fill container */
+.jobs-table-wrapper {
+  display: block;
+  width: 100%;
+}
+
+.jobs-table {
+  min-width: 100%;
 }
 
 .jobs-table thead {
@@ -1638,11 +1707,11 @@ body.dark-mode .light-text {
   color: #ffffff !important;
 }
 
-/* Name column - increase width for both light and dark mode */
+/* Name column - responsive width */
 .jobs-table thead th:first-child,
 .jobs-table tbody td:first-child {
-  min-width: 450px;
-  width: 450px;
+  min-width: 300px;
+  width: auto;
 }
 
 /* Light mode - Name column should be grey (Jenkins-style) */
@@ -2920,7 +2989,43 @@ body.dark-mode .ai-report-btn i {
   font-size: 18px;
   font-weight: 700;
   color: #000000;
+  margin: 0;
+}
+
+.error-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.error-filter-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.error-filter-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.error-filter-btn:hover {
+  background: #f3f4f6;
+}
+
+.error-filter-btn.active {
+  background: #374151;
+  color: #ffffff;
+  border-color: #374151;
 }
 
 .error-type-list {
@@ -2955,8 +3060,45 @@ body.dark-mode .ai-report-btn i {
   font-size: 16px;
   font-weight: 600;
   color: #000000;
+}
+
+.error-type-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex: 1;
   min-width: 200px;
+  flex-wrap: wrap;
+}
+
+/* Error Label Badges */
+.error-label {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.error-label-product_issue {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.error-label-testware_issue {
+  background-color: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fcd34d;
+}
+
+.error-label-environmental_issue {
+  background-color: #dbeafe;
+  color: #2563eb;
+  border: 1px solid #93c5fd;
 }
 
 .error-type-stats {
@@ -3130,6 +3272,23 @@ body.dark-mode .ai-report-errors h3 {
   color: #ffffff;
 }
 
+body.dark-mode .error-filter-btn {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+body.dark-mode .error-filter-btn:hover {
+  background: #374151;
+  color: #e5e7eb;
+}
+
+body.dark-mode .error-filter-btn.active {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #111827;
+}
+
 body.dark-mode .error-type-card {
   background: #2a2a2a;
   border-color: #444;
@@ -3137,6 +3296,25 @@ body.dark-mode .error-type-card {
 
 body.dark-mode .error-type-header h4 {
   color: #ffffff;
+}
+
+/* Dark mode error labels */
+body.dark-mode .error-label-product_issue {
+  background-color: #991b1b;
+  color: #ffffff;
+  border-color: #b91c1c;
+}
+
+body.dark-mode .error-label-testware_issue {
+  background-color: #92400e;
+  color: #ffffff;
+  border-color: #b45309;
+}
+
+body.dark-mode .error-label-environmental_issue {
+  background-color: #1e40af;
+  color: #ffffff;
+  border-color: #2563eb;
 }
 
 body.dark-mode .occurrences {
@@ -3226,19 +3404,31 @@ input#search {
   position: relative;
 }
 
-#exampleModalCenter .modal-header .close {
-  color: #333333;
-  opacity: 0.7;
+/* Simple close button - no animations */
+.modal-close-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
   font-size: 28px;
   font-weight: 300;
-  text-shadow: none;
-  transition: all 0.2s ease;
+  color: #333;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
 }
 
-#exampleModalCenter .modal-header .close:hover {
-  opacity: 1;
-  transform: rotate(90deg);
-  color: #000000;
+.modal-close-btn:hover {
+  color: #000;
+}
+
+body.dark-mode .modal-close-btn {
+  color: #fff;
+}
+
+body.dark-mode .modal-close-btn:hover {
+  color: #ccc;
 }
 
 #exampleModalCenter .modal-title {
@@ -3362,15 +3552,6 @@ body.dark-mode #exampleModalCenter .modal-header {
   color: #ffffff;
 }
 
-body.dark-mode #exampleModalCenter .modal-header .close {
-  color: #ffffff;
-  opacity: 0.9;
-}
-
-body.dark-mode #exampleModalCenter .modal-header .close:hover {
-  opacity: 1;
-  color: #ffffff;
-}
 
 body.dark-mode #exampleModalCenter .modal-title {
   color: #ffffff;
@@ -3440,7 +3621,7 @@ body.dark-mode #exampleModalCenter tbody a:hover {
 }
 
 #job-name {
-  max-width: 500px; 
+  max-width: none; 
   overflow-wrap: anywhere;
 }
 
@@ -3714,13 +3895,72 @@ body.dark-mode #trendModal .btn-group .btn-primary {
   color: #ffffff;
 }
 
-body.dark-mode .trend-legend span {
+/* Trend Legend Styles */
+.trend-legend {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin: 0 auto;
+}
+
+.trend-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trend-legend-color {
+  width: 15px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+.trend-legend-pass {
+  background: #28a745;
+  border: 2px solid #1e7e34;
+}
+
+.trend-legend-fail {
+  background: #dc3545;
+  border: 2px solid #a71e2a;
+}
+
+.trend-legend-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Axis labels */
+#trend-chart .axis-label {
+  fill: #333;
+}
+
+#trend-chart .axis text {
+  fill: #333;
+}
+
+#trend-chart .axis path,
+#trend-chart .axis line {
+  stroke: #333;
+}
+
+/* Dark mode trend chart */
+body.dark-mode .trend-legend-text {
   color: #e0e0e0;
 }
 
-body.dark-mode #trend-chart .legend text {
-  fill: #e0e0e0;
+body.dark-mode #trend-chart .axis-label {
+  fill: #e0e0e0 !important;
 }
+
+body.dark-mode #trend-chart .axis text {
+  fill: #e0e0e0 !important;
+}
+
+body.dark-mode #trend-chart .axis path,
+body.dark-mode #trend-chart .axis line {
+  stroke: #666 !important;
 }
 
 	

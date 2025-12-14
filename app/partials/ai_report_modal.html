@@ -40,11 +40,24 @@
         </div>
         
         <div class="ai-report-errors">
+          <div class="error-filter-header">
           <h3>Errors by Type</h3>
+            <div class="error-filter-buttons">
+              <button class="error-filter-btn" ng-class="{'active': activeFilter === 'all'}" ng-click="setFilter('all')">All</button>
+              <button class="error-filter-btn filter-product" ng-class="{'active': activeFilter === 'product_issue'}" ng-click="setFilter('product_issue')">Product Issue</button>
+              <button class="error-filter-btn filter-testware" ng-class="{'active': activeFilter === 'testware_issue'}" ng-click="setFilter('testware_issue')">Testware Issue</button>
+              <button class="error-filter-btn filter-environmental" ng-class="{'active': activeFilter === 'environmental_issue'}" ng-click="setFilter('environmental_issue')">Environmental Issue</button>
+            </div>
+          </div>
           <div class="error-type-list">
-            <div ng-repeat="errorType in report.errors_by_type" class="error-type-card">
+            <div ng-repeat="errorType in report.errors_by_type | filter:filterByLabel | orderBy:'-percentage'" class="error-type-card">
               <div class="error-type-header">
+                <div class="error-type-title-row">
                 <h4>{{ errorType.error_type }}</h4>
+                  <span ng-if="errorType.label" class="error-label error-label-{{ errorType.label }}">
+                    {{ errorType.label === 'product_issue' ? 'Product Issue' : (errorType.label === 'testware_issue' ? 'Testware Issue' : 'Environmental Issue') }}
+                  </span>
+                </div>
                 <div class="error-type-stats">
                   <span class="occurrences">{{ errorType.occurrences }} occurrences</span>
                   <span class="percentage">{{ errorType.percentage }}%</span>

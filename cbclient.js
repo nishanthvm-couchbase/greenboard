@@ -231,28 +231,90 @@ module.exports = async function () {
             return await _query(bucket, queryStr);
         },
         queryBuilds: async function (bucket, version, testsFilter, buildsFilter) {
-            var Q = "SELECT totalCount, failCount, `build` FROM `greenboard` WHERE `build` LIKE '" + version + "%' " +
-                " AND type = '" + bucket + "' AND totalCount >= " + testsFilter + " ORDER BY `build` DESC limit " + buildsFilter;
+            // Query to get build document keys - we'll calculate totals from individual jobs
+            var Q = "SELECT `build` FROM `greenboard` WHERE `build` LIKE '" + version + "%' " +
+                " AND type = '" + bucket + "' ORDER BY `build` DESC limit " + buildsFilter;
 
-            function processBuild(data) {
-                var builds = _.map(data, function (buildSet) {
-                    var total = buildSet.totalCount;
-                    var failed = buildSet.failCount;
-                    var passed = total - failed;
-                    return {
-                        Failed: failed,
-                        Passed: passed,
-                        build: buildSet.build
-                    };
+            // Calculate totals from individual jobs, excluding olderBuild and deleted jobs
+            // This matches how the sidebar calculates stats in datafactory.js
+            function calculateBuildTotals(buildDoc) {
+                var totalCount = 0;
+                var failCount = 0;
+                var skipCount = 0;
+                
+                if (!buildDoc || !buildDoc.os) {
+                    return { totalCount: 0, failCount: 0, skipCount: 0 };
+                }
+                
+                _.forEach(buildDoc.os, function(components, os) {
+                    _.forEach(components, function(jobs, component) {
+                        _.forEach(jobs, function(runs, jobName) {
+                            if (!Array.isArray(runs)) return;
+                            _.forEach(runs, function(run) {
+                                // Skip olderBuild and deleted jobs - same logic as sidebar
+                                if (run.olderBuild === true || run.deleted === true) {
+                                    return;
+                                }
+                                totalCount += (run.totalCount || 0);
+                                failCount += (run.failCount || 0);
+                                skipCount += (run.skipCount || 0);
+                            });
                 });
-                return builds;
+                    });
+                });
+                
+                return { totalCount, failCount, skipCount };
             }
 
             async function queryBuild() {
                 try {
-                    const data = await _query(bucket, Q);
-                    buildsResponseCache[version] = _.cloneDeep(data);
-                    return processBuild(data);
+                    // First get the list of builds
+                    const buildList = await _query(bucket, Q);
+                    
+                    if (!buildList || buildList.length === 0) {
+                        return [];
+                    }
+                    
+                    // Fetch full documents to calculate correct totals
+                    const docIds = buildList.map(b => b.build + "_" + bucket);
+                    const docs = await _getmulti('greenboard', docIds);
+                    
+                    var builds = [];
+                    for (const buildInfo of buildList) {
+                        const docId = buildInfo.build + "_" + bucket;
+                        const doc = docs[docId]?.value;
+                        
+                        if (!doc) continue;
+                        
+                        // Handle Buffer if needed (same as jobsForBuild)
+                        let buildDoc = doc;
+                        if (Buffer.isBuffer(doc)) {
+                            try {
+                                let docString = doc.toString();
+                                docString = docString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                                buildDoc = JSON.parse(docString);
+                            } catch (parseError) {
+                                console.error("Failed to parse build document:", parseError.message);
+                                continue;
+                            }
+                        }
+                        
+                        // Calculate totals from individual jobs (excluding olderBuild/deleted)
+                        const totals = calculateBuildTotals(buildDoc);
+                        
+                        // Apply testsFilter on calculated totals
+                        if (totals.totalCount >= testsFilter) {
+                            var passed = totals.totalCount - totals.failCount - totals.skipCount;
+                            builds.push({
+                                Failed: totals.failCount,
+                                Passed: passed,
+                                build: buildInfo.build
+                            });
+                        }
+                    }
+                    
+                    buildsResponseCache[version] = _.cloneDeep(builds);
+                    return builds;
                 } catch (err) {
                     console.error(err);
                     throw err;

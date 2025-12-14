@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenboard V3 - Release Notes</title>
+    <!-- Preconnect for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #111113;
+            --bg-card: #18181b;
+            --bg-card-hover: #1f1f23;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-purple: #8b5cf6;
+            --accent-purple-dim: #7c3aed;
+            --accent-blue: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+            --accent-cyan: #06b6d4;
+            --border-color: #27272a;
+            --gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100vh;
+            background: 
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 0%, rgba(59, 130, 246, 0.1), transparent),
+                radial-gradient(ellipse 60% 40% at 0% 100%, rgba(139, 92, 246, 0.08), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 100px;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--accent-purple);
+            margin-bottom: 24px;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            letter-spacing: -2px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-version {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .hero-version span {
+            color: var(--accent-purple);
+            font-weight: 600;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            margin-top: 40px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Section Styles */
+        .section {
+            padding: 60px 0;
+        }
+
+        .section-header {
+            margin-bottom: 40px;
+        }
+
+        .section-label {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-purple);
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 12px;
+        }
+
+        .section-description {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 600px;
+        }
+
+        /* Feature Cards */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .feature-icon.purple { background: rgba(139, 92, 246, 0.15); }
+        .feature-icon.blue { background: rgba(59, 130, 246, 0.15); }
+        .feature-icon.green { background: rgba(34, 197, 94, 0.15); }
+        .feature-icon.orange { background: rgba(249, 115, 22, 0.15); }
+        .feature-icon.cyan { background: rgba(6, 182, 212, 0.15); }
+
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .feature-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(139, 92, 246, 0.15);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--accent-purple);
+            margin-top: 16px;
+        }
+
+        /* Image Container */
+        .image-container {
+            margin: 24px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .image-container.compact {
+            max-width: 700px;
+            margin: 24px auto;
+            padding: 16px;
+        }
+
+        .feature-image {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+
+        /* Image Placeholder (for future use) */
+        .image-placeholder {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 60px;
+            text-align: center;
+            margin: 24px 0;
+        }
+
+        .image-placeholder-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .image-placeholder-text {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Highlight Card */
+        .highlight-card {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 20px;
+            padding: 48px;
+            margin: 40px 0;
+        }
+
+        .highlight-card h3 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .highlight-card p {
+            color: var(--text-secondary);
+            font-size: 16px;
+            line-height: 1.8;
+            max-width: 800px;
+        }
+
+        /* Tech Stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 32px;
+        }
+
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+
+        .tech-item-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            background: rgba(139, 92, 246, 0.15);
+        }
+
+        .tech-item-content h4 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .tech-item-content p {
+            font-size: 15px;
+            color: var(--text-muted);
+        }
+
+        .version-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-green);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .version-badge.old {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        /* AI Section */
+        .ai-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-top: 32px;
+        }
+
+        .ai-step {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .ai-step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--gradient-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .ai-step-content {
+            flex: 1;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .ai-step:last-child .ai-step-content {
+            border-bottom: none;
+        }
+
+        .ai-step-content h4 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .ai-step-content p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .code-block {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--accent-cyan);
+            overflow-x: auto;
+        }
+
+        /* Bug Fixes */
+        .bugfix-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .bugfix-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+        }
+
+        .bugfix-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(34, 197, 94, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .bugfix-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 60px 0;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+            margin-top: 60px;
+        }
+
+        .footer p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: var(--accent-purple);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+            
+            .hero-stats {
+                flex-direction: column;
+                gap: 24px;
+            }
+            
+            .section-title {
+                font-size: 28px;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .ai-step {
+                flex-direction: column;
+            }
+        }
+
+        /* Label colors */
+        .label {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .label-product {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .label-testware {
+            background: rgba(249, 115, 22, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .label-env {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+        }
+
+        /* Back button */
+        .back-link {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            z-index: 100;
+        }
+
+        .back-link:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--accent-purple);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <a href="/" class="back-link">
+        ← Back to Greenboard
+    </a>
+
+    <div class="container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-badge">
+                Release Notes
+            </div>
+            <h1>Greenboard V3</h1>
+            <p class="hero-version">Version <span>3.0.0</span> • December 2025</p>
+            
+            <div class="hero-stats">
+                <div class="stat">
+                    <div class="stat-value">Node 24</div>
+                    <div class="stat-label">Runtime Upgrade</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">SDK 4.x</div>
+                    <div class="stat-label">Couchbase Upgrade</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">AI</div>
+                    <div class="stat-label">Powered Analysis</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dark Mode Section -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">UI Enhancement</div>
+                <h2 class="section-title">Complete Dark Mode</h2>
+                <p class="section-description">A fully redesigned dark theme with carefully crafted colors for reduced eye strain and better visibility.</p>
+            </div>
+
+            <div class="image-container">
+                <img src="images/dark-mode.png" alt="Dark Mode Screenshot" class="feature-image">
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon purple">🎨</div>
+                    <h3>Purple Accent Theme</h3>
+                    <p>Beautiful gradient headers and accent colors that make important elements pop while maintaining readability.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon blue">🌓</div>
+                    <h3>Seamless Toggle</h3>
+                    <p>Switch between light and dark modes instantly with the toggle in the top navigation bar. Your preference is saved automatically.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- AI Analysis Section -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">AI Powered</div>
+                <h2 class="section-title">Intelligent Error Analysis</h2>
+                <p class="section-description">Leverage AI and vector search to automatically categorize and analyze test failures with unprecedented accuracy.</p>
+            </div>
+
+            <div class="highlight-card">
+                <h3>How It Works</h3>
+                <p>Our AI pipeline uses Ollama with GPT models and vector embeddings to analyze error patterns, search through 60,000+ Jira issues, and classify failures into actionable categories.</p>
+            </div>
+
+            <div class="ai-flow">
+                <div class="ai-step">
+                    <div class="ai-step-number">1</div>
+                    <div class="ai-step-content">
+                        <h4>Jira Knowledge Base</h4>
+                        <p>We fetch and process 60,000+ Jira issues (MB-926 to MB-69610), clean the descriptions, map components, and generate vector embeddings using the nomic-embed-text model.</p>
+                        <div class="code-block">fetch_jira_issues.py → Couchbase "issues" bucket with vector embeddings</div>
+                    </div>
+                </div>
+                <div class="ai-step">
+                    <div class="ai-step-number">2</div>
+                    <div class="ai-step-content">
+                        <h4>Error Extraction & Categorization</h4>
+                        <p>For each build, we extract claims from failed jobs and use AI to categorize them into descriptive error types like "Initial rebalance failed" or "AssertionError: Value mismatch".</p>
+                        <div class="code-block">analyze_errors.py → Two-pass categorization with merging</div>
+                    </div>
+                </div>
+                <div class="ai-step">
+                    <div class="ai-step-number">3</div>
+                    <div class="ai-step-content">
+                        <h4>Vector Search for Context</h4>
+                        <p>Each error type is embedded and compared against the Jira knowledge base using COSINE similarity to find the most relevant historical issues for context.</p>
+                        <div class="code-block">APPROX_VECTOR_DISTANCE(embedding, query_vector, 'COSINE') < 1.0</div>
+                    </div>
+                </div>
+                <div class="ai-step">
+                    <div class="ai-step-number">4</div>
+                    <div class="ai-step-content">
+                        <h4>Classification with Labels</h4>
+                        <p>Using the Jira context, each error is classified into one of three categories:</p>
+                        <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                            <span class="label label-product">Product Issue</span>
+                            <span class="label label-testware">Testware Issue</span>
+                            <span class="label label-env">Environmental Issue</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="image-container">
+                <img src="images/ai-report.png" alt="AI Report Modal Screenshot" class="feature-image" loading="lazy">
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon green">🏷️</div>
+                    <h3>Color-Coded Labels</h3>
+                    <p>Each error type displays a colored badge indicating its classification - red for product issues, orange for testware, blue for environmental.</p>
+                    <div class="feature-tag">New</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon cyan">🔍</div>
+                    <h3>Filter by Category</h3>
+                    <p>Quickly filter the error list to show only Product Issues, Testware Issues, or Environmental Issues. All errors ranked by percentage.</p>
+                    <div class="feature-tag">New</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- S3 Link Feature -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">New Feature</div>
+                <h2 class="section-title">S3 Log Links</h2>
+                <p class="section-description">Quick access to archived Jenkins logs stored in S3, generated automatically from job URLs.</p>
+            </div>
+
+            <div class="image-container compact">
+                <img src="images/s3-link.png" alt="S3 Link Column Screenshot" class="feature-image" loading="lazy">
+            </div>
+
+            <div class="feature-card" style="max-width: 600px;">
+                <div class="feature-icon orange">📁</div>
+                <h3>Auto-Generated S3 Links</h3>
+                <p>The "All Test Runs" popup now includes an S3 Link column. Links are generated on-the-fly from the job URL - no additional database storage required.</p>
+                <div class="code-block">cb-logs-qe.s3-website-us-west-2.amazonaws.com/{version}/jenkins_logs/{job}/{build_id}</div>
+                <div class="feature-tag">New</div>
+            </div>
+        </section>
+
+        <!-- Job Trend Section -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">Visualization</div>
+                <h2 class="section-title">Job Trend Analysis</h2>
+                <p class="section-description">Track job performance across versions with interactive scatter and bar charts.</p>
+            </div>
+
+            <div class="image-container compact">
+                <img src="images/job-trend.png" alt="Job Trend Chart Screenshot" class="feature-image" loading="lazy">
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon purple">📉</div>
+                    <h3>Scatter View</h3>
+                    <p>Visualize pass/fail results across versions with run numbers on the Y-axis. Perfect for spotting patterns and flaky tests.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon blue">📊</div>
+                    <h3>Bar Chart View</h3>
+                    <p>Stacked bar chart showing cumulative runs per version. Toggle between views to get different perspectives on job history.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Upgrades -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">Infrastructure</div>
+                <h2 class="section-title">Major Technical Upgrades</h2>
+                <p class="section-description">Under the hood improvements for better performance, reliability, and maintainability.</p>
+            </div>
+
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="tech-item-icon">🗄️</div>
+                    <div class="tech-item-content">
+                        <h4>Couchbase SDK</h4>
+                        <p>
+                            <span class="version-badge old">2.6.12</span>
+                            →
+                            <span class="version-badge">4.x</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">⚡</div>
+                    <div class="tech-item-content">
+                        <h4>Node.js Runtime</h4>
+                        <p>
+                            <span class="version-badge old">v8.x</span>
+                            →
+                            <span class="version-badge">v24</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">🔄</div>
+                    <div class="tech-item-content">
+                        <h4>Async/Await Patterns</h4>
+                        <p>Modern JavaScript with proper error handling</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">📦</div>
+                    <div class="tech-item-content">
+                        <h4>Buffer Handling</h4>
+                        <p>Proper handling for large JSON documents</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">🔁</div>
+                    <div class="tech-item-content">
+                        <h4>Retry Logic</h4>
+                        <p>Automatic retries with exponential backoff</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">🗜️</div>
+                    <div class="tech-item-content">
+                        <h4>Gzip Compression</h4>
+                        <p>All responses compressed for faster load times</p>
+                    </div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-icon">💾</div>
+                    <div class="tech-item-content">
+                        <h4>Asset Caching</h4>
+                        <p>Static files cached for instant return visits</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- UI Improvements -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">Design</div>
+                <h2 class="section-title">UI Modernization</h2>
+                <p class="section-description">A fresh, modern look with improved usability and visual hierarchy.</p>
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon purple">🎴</div>
+                    <h3>Card-Based Layout</h3>
+                    <p>Clean card components with subtle shadows, rounded corners, and hover effects for a more modern feel.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon blue">📐</div>
+                    <h3>Responsive Tables</h3>
+                    <p>Jobs table now expands properly at higher resolutions with optimized column widths.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon green">🔤</div>
+                    <h3>System Fonts</h3>
+                    <p>Native system font stack for crisp text rendering across all platforms.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon orange">✨</div>
+                    <h3>Smooth Animations</h3>
+                    <p>Subtle transitions and hover effects that enhance the experience without being distracting.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bug Fixes -->
+        <section class="section">
+            <div class="section-header">
+                <div class="section-label">Fixes</div>
+                <h2 class="section-title">Bug Fixes</h2>
+                <p class="section-description">Issues resolved in this release.</p>
+            </div>
+
+            <div class="bugfix-list">
+                <div class="bugfix-item">
+                    <div class="bugfix-icon">✓</div>
+                    <div class="bugfix-text"><strong>Bar Chart Data Consistency</strong> — Fixed mismatch between sidebar stats and bar chart data. Both now correctly exclude olderBuild and deleted jobs, ensuring consistent calculation logic across the UI.</div>
+                </div>
+                <div class="bugfix-item">
+                    <div class="bugfix-icon">✓</div>
+                    <div class="bugfix-text"><strong>Bar Chart Label Overlap</strong> — Fixed pass and fail count labels overlapping on builds with fewer runs. Labels now position correctly regardless of data density.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Greenboard V3 • Built with ❤️ </p>
+            <p style="margin-top: 8px;">
+                <a href="/">Back to Greenboard</a>
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
+

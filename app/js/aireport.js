@@ -6,6 +6,20 @@ angular.module('app.aireport', [])
     $scope.error = null;
     $scope.version = null;
     $scope.component = null;
+    $scope.activeFilter = 'all';
+
+    // Filter function for error labels
+    $scope.filterByLabel = function(errorType) {
+      if ($scope.activeFilter === 'all') {
+        return true;
+      }
+      return errorType.label === $scope.activeFilter;
+    };
+
+    // Set active filter
+    $scope.setFilter = function(filter) {
+      $scope.activeFilter = filter;
+    };
 
     $rootScope.$on('openAIReport', function(event, data) {
       $scope.version = data.version;
@@ -14,6 +28,7 @@ angular.module('app.aireport', [])
       $scope.loading = true;
       $scope.report = null;
       $scope.error = null;
+      $scope.activeFilter = 'all';
 
       QueryService.getReport(data.version, data.component)
         .then(function(report) {

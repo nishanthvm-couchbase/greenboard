@@ -288,6 +288,52 @@ angular.module('app.main', [])
             $scope.predicate = "name";
             $scope.reverse = false;
             
+            // Generate S3 link from job URL and build version
+            // Format: http://cb-logs-qe.s3-website-us-west-2.amazonaws.com/{version}/jenkins_logs/{job_name}/{build_no}
+            // Example: http://cb-logs-qe.s3-website-us-west-2.amazonaws.com/8.1.0-1256/jenkins_logs/test_suite_executor-TAF/12452/
+            $scope.getS3Link = function(job, buildVersion) {
+                if (!job || !job.url || !buildVersion) {
+                    return null;
+                }
+                try {
+                    // Get build_id - handle 0 as valid value
+                    var buildId = (job.build_id !== undefined && job.build_id !== null && job.build_id !== '') 
+                                  ? String(job.build_id) : '';
+                    
+                    // Construct full job URL: url + build_id (same as the Link href)
+                    var fullUrl = String(job.url) + buildId;
+                    
+                    // Remove trailing slash and split by '/'
+                    fullUrl = fullUrl.replace(/\/$/, '');
+                    var urlParts = fullUrl.split('/');
+                    
+                    // URL format: http://qa.sc.couchbase.com/job/test_suite_executor-TAF/12452
+                    // After split: ['http:', '', 'qa.sc.couchbase.com', 'job', 'test_suite_executor-TAF', '12452']
+                    var buildNo = urlParts[urlParts.length - 1];
+                    var jobName = urlParts[urlParts.length - 2];
+                    
+                    // buildNo should be a valid number (digits only)
+                    if (!buildNo || !jobName || !/^\d+$/.test(buildNo)) {
+                        console.log('S3 Link debug - invalid data:', { 
+                            url: job.url, 
+                            build_id: job.build_id, 
+                            fullUrl: fullUrl,
+                            buildNo: buildNo, 
+                            jobName: jobName 
+                        });
+                        return null;
+                    }
+                    
+                    // Build the S3 link
+                    var s3Link = 'http://cb-logs-qe.s3-website-us-west-2.amazonaws.com/' + 
+                                 buildVersion + '/jenkins_logs/' + 
+                                 jobName + '/' + buildNo;
+                    return s3Link;
+                } catch (e) {
+                    console.error('Error generating S3 link:', e);
+                    return null;
+                }
+            };
 
                 $scope.onselect = 
                     function(jobname,os,comp,variants){
@@ -633,6 +679,7 @@ angular.module('app.main', [])
                     
                     // Add axis labels
                     g.append("text")
+                        .attr("class", "axis-label")
                         .attr("transform", "rotate(-90)")
                         .attr("y", 0 - margin.left)
                         .attr("x", 0 - (height / 2))
@@ -640,15 +687,14 @@ angular.module('app.main', [])
                         .style("text-anchor", "middle")
                         .style("font-size", "13px")
                         .style("font-weight", "600")
-                        .style("fill", "#333")
                         .text("Run Number");
                     
                     g.append("text")
+                        .attr("class", "axis-label")
                         .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
                         .style("text-anchor", "middle")
                         .style("font-size", "13px")
                         .style("font-weight", "600")
-                        .style("fill", "#333")
                         .text("Version");
                     
                     // Legend is now in HTML, not in SVG
@@ -878,6 +924,7 @@ angular.module('app.main', [])
                     
                     // Add axis labels
                     g.append("text")
+                        .attr("class", "axis-label")
                         .attr("transform", "rotate(-90)")
                         .attr("y", 0 - margin.left)
                         .attr("x", 0 - (height / 2))
@@ -885,15 +932,14 @@ angular.module('app.main', [])
                         .style("text-anchor", "middle")
                         .style("font-size", "13px")
                         .style("font-weight", "600")
-                        .style("fill", "#333")
                         .text("Run Number");
                     
                     g.append("text")
+                        .attr("class", "axis-label")
                         .attr("transform", "translate(" + (width / 2) + " ," + (height + margin.bottom - 10) + ")")
                         .style("text-anchor", "middle")
                         .style("font-size", "13px")
                         .style("font-weight", "600")
-                        .style("fill", "#333")
                         .text("Version");
                     
                     // Legend is now in HTML, not in SVG
