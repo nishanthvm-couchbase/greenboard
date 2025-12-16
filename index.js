@@ -77,8 +77,15 @@ app.get('/builds/:bucket/:version/:testsFilter/:buildsFilter', function(req, res
   var version = req.params.version
   var testsFilter = req.params.testsFilter
   var buildsFilter = req.params.buildsFilter
+  
+  // Extract optional filters from query parameters
+  var filters = {
+    platforms: req.query.platforms || null,
+    features: req.query.features || null
+  };
+  
   var builds = []
-  client.queryBuilds(bucket, version, testsFilter, buildsFilter)
+  client.queryBuilds(bucket, version, testsFilter, buildsFilter, filters)
   	.then(function(data){
   		data.sort(function(b1, b2){
   			if(b1.build > b2.build){

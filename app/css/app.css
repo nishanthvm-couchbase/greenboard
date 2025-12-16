@@ -275,6 +275,15 @@ body {
     margin-left:5px;
     margin-right:20px;
   }
+  
+  /* Slightly wider sidebar */
+  .sidebar.sidebar-wider {
+    width: 18%;
+  }
+  
+  .col-sm-offset-2.main {
+    margin-left: 18%;
+  }
 }
 
 /* Sidebar navigation - Modern Redesign */
@@ -315,7 +324,8 @@ body {
   padding: 16px 20px;
 }
 
-.jobs-title {
+.jobs-title,
+.analysis-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
@@ -818,13 +828,16 @@ body {
   align-items: center;
   color: #333;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.2s ease;
   background-color: transparent;
   padding: 0;
-  padding-right: 10px;
+  padding-right: 70px; /* Reserve space for percentage */
   min-width: 0;
   position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .custom-list-group-item a:hover {
@@ -857,51 +870,195 @@ body {
 .testscore {
   position: absolute;
   right: 60px;
-  top: auto;
-  bottom: 12px;
-  font-size: 14px;
+  top: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #333;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.1;
   margin: 0;
   padding: 0;
-  min-width: 0;
-  width: auto;
-  z-index: 1;
+  min-width: 50px;
+  text-align: right;
+  z-index: 2;
+  background: inherit;
 }
 
 /* Adjust percentage position when AI button is present */
 .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class]:has(.ai-report-btn) .testscore,
 .nav-sidebar > sidebar-item > div[ng-class]:has(.ai-report-btn) .testscore {
-  right: 60px;
+  right: 55px;
 }
 
 /* Default position for items without AI button */
 .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class]:not(:has(.ai-report-btn)) .testscore,
 .nav-sidebar > sidebar-item > div[ng-class]:not(:has(.ai-report-btn)) .testscore {
-  right: 2px;
+  right: 8px;
+}
+
+/* Responsive adjustments for smaller screens and zoom levels */
+/* Covers: 2056px@110%, 1728px@100%, 1728px@110% */
+@media (max-width: 1920px) {
+  /* Sidebar adjustments */
+  .custom-list-group-item a {
+    font-size: 12px;
+    padding-right: 60px;
+  }
+  
+  .testscore {
+    font-size: 12px;
+    min-width: 45px;
+  }
+  
+  .scoredesc {
+    font-size: 8px;
+  }
+  
+  .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class]:has(.ai-report-btn) .custom-list-group-item a,
+  .nav-sidebar > sidebar-item > div[ng-class]:has(.ai-report-btn) .custom-list-group-item a {
+    padding-right: 100px;
+  }
+  
+  .ai-report-btn {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+  
+  .ai-report-btn .ai-text {
+    font-size: 9px;
+  }
+  
+  /* Main section headings - scale down slightly */
+  .build-title {
+    font-size: 28px;
+  }
+  
+  .jobs-title,
+  .analysis-title {
+    font-size: 16px;
+  }
+  
+  .jobs-header,
+  .analysis-header {
+    padding: 14px 18px;
+  }
+  
+  .jobs-content {
+    padding: 16px;
+  }
+  
+  /* Job stats tabs - slightly compact to fit on one line */
+  .job-panel-tab a {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  /* Search input */
+  .jobs-search-input {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+  .jobs-search-wrapper {
+    min-width: 280px;
+  }
+}
+
+/* Extra small screens - 1728px@110% zoom (~1571px effective) */
+@media (max-width: 1600px) {
+  /* Top nav buttons - more compact */
+  .btn-group .btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  
+  .btn-group {
+    margin-right: 6px;
+  }
+  
+  /* Pagination/filter buttons - prevent wrapping */
+  .pagination {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  
+  .pagination li {
+    margin: 0 1px;
+  }
+  
+  .pagination li a {
+    padding: 5px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  
+  /* Nav row - tighter spacing */
+  .nav-buttons .col-sm-1,
+  .nav-buttons .col-sm-2,
+  .nav-buttons .col-sm-4 {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  
+  .nav-buttons .nav-group {
+    margin-left: 0 !important;
+  }
+  
+  /* Build version title */
+  .build-title {
+    font-size: 24px;
+  }
+  
+  /* Section headers */
+  .jobs-title,
+  .analysis-title {
+    font-size: 14px;
+  }
+  
+  .jobs-header,
+  .analysis-header {
+    padding: 10px 14px;
+  }
+  
+  /* Job tabs - even more compact */
+  .job-panel-tab a {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  
+  /* Sidebar - smaller */
+  .custom-list-group-item a {
+    font-size: 11px;
+  }
+  
+  .testscore {
+    font-size: 11px;
+  }
+  
+  .scoredesc {
+    font-size: 7px;
+  }
 }
 
 /* Adjust link padding for items with AI button */
 .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class]:has(.ai-report-btn) .custom-list-group-item a,
 .nav-sidebar > sidebar-item > div[ng-class]:has(.ai-report-btn) .custom-list-group-item a {
-  padding-right: 60px;
+  padding-right: 115px; /* Space for percentage + AI button */
 }
 
 /* Default padding for items without AI button */
 .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class]:not(:has(.ai-report-btn)) .custom-list-group-item a,
 .nav-sidebar > sidebar-item > div[ng-class]:not(:has(.ai-report-btn)) .custom-list-group-item a {
-  padding-right: 10px;
+  padding-right: 60px; /* Space for percentage only */
 }
 
 .scoredesc {
   grid-column: 1;
   grid-row: 2;
   font-size: 9px;
-  margin-top: 6px;
+  margin-top: 4px;
   padding: 0;
-  padding-right: 60px;
+  padding-right: 10px;
   margin-right: 0;
   color: #666;
   line-height: 1.2;
@@ -922,6 +1079,525 @@ body {
 .nav-sidebar > sidebar-item > div[ng-class]:not(:has(.ai-report-btn)) .scoredesc {
   padding-right: 10px;
 }
+
+/* ===========================================
+   NEW SIDEBAR ITEM CARD DESIGN
+   =========================================== */
+
+.sidebar-item-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  overflow: hidden;
+  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: all 0.2s ease;
+}
+
+.sidebar-item-card:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+
+/* Color coding based on pass rate */
+.sidebar-item-card.bg-success {
+  background: linear-gradient(90deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.05) 100%);
+  border-left-color: #28a745;
+}
+
+.sidebar-item-card.bg-warning {
+  background: linear-gradient(90deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0.08) 100%);
+  border-left-color: #ffc107;
+}
+
+.sidebar-item-card.bg-danger {
+  background: linear-gradient(90deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.05) 100%);
+  border-left-color: #dc3545;
+}
+
+.sidebar-item-card.bg-muted {
+  background: linear-gradient(90deg, rgba(108, 117, 125, 0.1) 0%, rgba(108, 117, 125, 0.03) 100%);
+  border-left-color: #6c757d;
+}
+
+.sidebar-item-card.greyed {
+  background: #f8f8f8;
+  border-left-color: #ccc;
+  opacity: 0.7;
+}
+
+/* Content layer */
+.sidebar-item-card .sidebar-item-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* Header row: checkbox and name only - full width */
+.sidebar-item-card .sidebar-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-item-card .sidebar-item-header .glyphicon {
+  font-size: 18px;
+  color: #ffc107;
+  flex-shrink: 0;
+}
+
+.sidebar-item-card .item-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex: 1;
+}
+
+.sidebar-item-card .component-analytics {
+  color: #666;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-item-card .component-analytics:hover {
+  color: #333;
+}
+
+/* Stats row: run rate + pass rate */
+.sidebar-item-card .sidebar-item-stats-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-left: 26px;
+}
+
+.sidebar-item-card .run-rate-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #888;
+}
+
+.sidebar-item-card .pass-rate-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-item-card .pass-rate-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-item-card .pass-rate-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #28a745;
+}
+
+/* Number mode - when toggle shows absolute numbers */
+.sidebar-item-card .pass-rate-value.num-mode {
+  font-size: 16px;
+}
+
+.sidebar-item-card .run-rate-text.num-mode {
+  font-size: 13px;
+}
+
+/* Details row */
+.sidebar-item-card .sidebar-item-details {
+  font-size: 11px;
+  color: #555;
+  margin-top: 4px;
+  padding-left: 26px;
+}
+
+/* Pass rate color based on card type */
+.sidebar-item-card.bg-success .pass-rate-value {
+  color: #28a745;
+}
+
+.sidebar-item-card.bg-warning .pass-rate-value {
+  color: #d4a000;
+}
+
+.sidebar-item-card.bg-danger .pass-rate-value {
+  color: #dc3545;
+}
+
+.sidebar-item-card.greyed .pass-rate-value {
+  color: #999;
+}
+
+/* AI button as separate row */
+.sidebar-item-card .ai-report-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.sidebar-item-card .ai-report-btn-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(31, 41, 55, 0.4);
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+}
+
+.sidebar-item-card .ai-report-btn-row .ai-text {
+  font-weight: 700;
+  font-size: 10px;
+  background: rgba(255,255,255,0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.sidebar-item-card .ai-report-btn-row .glyphicon {
+  font-size: 11px;
+  color: white;
+  margin: 0;
+}
+
+.sidebar-item-card .ai-report-btn-row .ai-label {
+  font-weight: 500;
+}
+
+
+/* Disabled state */
+.sidebar-item-card.disabled {
+  opacity: 0.6;
+  background: #f8f8f8;
+  border-left-color: #ccc;
+}
+
+.sidebar-item-card.disabled .pass-rate-bg,
+.sidebar-item-card.disabled .run-rate-bg {
+  display: none;
+}
+
+.sidebar-item-card.disabled .sidebar-item-header .glyphicon {
+  color: #ccc;
+}
+
+.sidebar-item-card.disabled .item-name {
+  color: #999;
+}
+
+.sidebar-item-card.disabled .pass-rate-value {
+  color: #999;
+}
+
+/* =========================================== 
+   DARK MODE for Sidebar Item Cards 
+   =========================================== */
+
+body.dark-mode .sidebar-item-card {
+  background: #1e1e1e !important;
+  border-left-color: #555;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+body.dark-mode .sidebar-item-card:hover {
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  background: #252525 !important;
+}
+
+/* Dark mode color coding - dark backgrounds with colored accents */
+body.dark-mode .sidebar-item-card.bg-success {
+  background: linear-gradient(90deg, #1a2e1a 0%, #1e1e1e 100%) !important;
+  border-left-color: #4caf50;
+  border-left-width: 5px;
+}
+
+body.dark-mode .sidebar-item-card.bg-success:hover {
+  background: linear-gradient(90deg, #213521 0%, #252525 100%) !important;
+}
+
+body.dark-mode .sidebar-item-card.bg-warning {
+  background: linear-gradient(90deg, #2e2a1a 0%, #1e1e1e 100%) !important;
+  border-left-color: #ffc107;
+  border-left-width: 5px;
+}
+
+body.dark-mode .sidebar-item-card.bg-warning:hover {
+  background: linear-gradient(90deg, #353020 0%, #252525 100%) !important;
+}
+
+body.dark-mode .sidebar-item-card.bg-danger {
+  background: linear-gradient(90deg, #2e1a1a 0%, #1e1e1e 100%) !important;
+  border-left-color: #f44336;
+  border-left-width: 5px;
+}
+
+body.dark-mode .sidebar-item-card.bg-danger:hover {
+  background: linear-gradient(90deg, #352121 0%, #252525 100%) !important;
+}
+
+body.dark-mode .sidebar-item-card.bg-muted {
+  background: linear-gradient(90deg, #252525 0%, #1e1e1e 100%) !important;
+  border-left-color: #666;
+  border-left-width: 5px;
+}
+
+body.dark-mode .sidebar-item-card.greyed {
+  background: #151515 !important;
+  border-left-color: #333;
+  opacity: 0.7;
+}
+
+/* Dark mode text colors */
+body.dark-mode .sidebar-item-card .item-name {
+  color: #ffffff;
+}
+
+body.dark-mode .sidebar-item-card .run-rate-text {
+  color: #999;
+}
+
+body.dark-mode .sidebar-item-card .pass-rate-label {
+  color: #bbb;
+}
+
+body.dark-mode .sidebar-item-card .sidebar-item-details {
+  color: #aaa;
+}
+
+body.dark-mode .sidebar-item-card .component-analytics {
+  color: #888;
+}
+
+body.dark-mode .sidebar-item-card .component-analytics:hover {
+  color: #fff;
+}
+
+/* Dark mode pass rate value colors */
+body.dark-mode .sidebar-item-card .pass-rate-value {
+  color: #4caf50;
+}
+
+body.dark-mode .sidebar-item-card.bg-success .pass-rate-value {
+  color: #66bb6a;
+}
+
+body.dark-mode .sidebar-item-card.bg-warning .pass-rate-value {
+  color: #ffca28;
+}
+
+body.dark-mode .sidebar-item-card.bg-danger .pass-rate-value {
+  color: #ef5350;
+}
+
+/* Dark mode checkbox/glyphicon colors */
+body.dark-mode .sidebar-item-card .sidebar-item-header .glyphicon {
+  color: #ffc107;
+}
+
+body.dark-mode .sidebar-item-card.bg-success .sidebar-item-header .glyphicon {
+  color: #66bb6a;
+}
+
+body.dark-mode .sidebar-item-card.bg-warning .sidebar-item-header .glyphicon {
+  color: #ffca28;
+}
+
+body.dark-mode .sidebar-item-card.bg-danger .sidebar-item-header .glyphicon {
+  color: #ef5350;
+}
+
+/* Dark mode greyed/disabled state */
+body.dark-mode .sidebar-item-card.greyed .sidebar-item-header .glyphicon {
+  color: #555;
+}
+
+body.dark-mode .sidebar-item-card.greyed .item-name {
+  color: #666;
+}
+
+body.dark-mode .sidebar-item-card.greyed .pass-rate-label {
+  color: #555;
+}
+
+body.dark-mode .sidebar-item-card.greyed .pass-rate-value {
+  color: #555;
+}
+
+body.dark-mode .sidebar-item-card.greyed .run-rate-text {
+  color: #444;
+}
+
+body.dark-mode .sidebar-item-card.greyed .sidebar-item-details {
+  color: #444;
+}
+
+body.dark-mode .sidebar-item-card.disabled {
+  background: #151515 !important;
+  border-left-color: #333;
+}
+
+body.dark-mode .sidebar-item-card.disabled .item-name {
+  color: #555;
+}
+
+body.dark-mode .sidebar-item-card.disabled .pass-rate-value {
+  color: #555;
+}
+
+/* Dark mode - AI button row */
+body.dark-mode .sidebar-item-card .ai-report-btn-row {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+body.dark-mode .sidebar-item-card .ai-report-btn-row:hover {
+  box-shadow: 0 3px 12px rgba(139, 92, 246, 0.5);
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+/* =========================================== 
+   RESPONSIVE Sidebar Item Cards 
+   =========================================== */
+
+@media (max-width: 1920px) {
+  .sidebar-item-card {
+    padding: 12px 14px;
+  }
+  
+  .sidebar-item-card .item-name {
+    font-size: 12px;
+  }
+  
+  .sidebar-item-card .pass-rate-label {
+    font-size: 9px;
+  }
+  
+  .sidebar-item-card .pass-rate-value {
+    font-size: 17px;
+    min-width: 50px;
+  }
+  
+  .sidebar-item-card .sidebar-item-header .glyphicon {
+    font-size: 16px;
+  }
+  
+  .sidebar-item-card .sidebar-item-stats-row {
+    padding-left: 24px;
+  }
+  
+  .sidebar-item-card .run-rate-text {
+    font-size: 12px;
+  }
+  
+  .sidebar-item-card .pass-rate-label {
+    font-size: 10px;
+  }
+  
+  .sidebar-item-card .sidebar-item-details {
+    font-size: 10px;
+    padding-left: 24px;
+  }
+  
+  .sidebar-item-card .ai-report-btn-row {
+    padding: 5px 8px;
+    font-size: 10px;
+    margin-top: 8px;
+  }
+  
+  .sidebar-item-card .ai-report-btn-row .ai-text {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+}
+
+/* Fix for 1728px resolution - slightly smaller item name */
+@media (max-width: 1750px) and (min-width: 1650px) {
+  .sidebar-item-card .item-name {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1600px) {
+  .sidebar-item-card {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  
+  .sidebar-item-card .item-name {
+    font-size: 11px;
+  }
+  
+  .sidebar-item-card .pass-rate-label {
+    font-size: 8px;
+  }
+  
+  .sidebar-item-card .pass-rate-value {
+    font-size: 15px;
+    min-width: 45px;
+  }
+  
+  .sidebar-item-card .sidebar-item-header .glyphicon {
+    font-size: 14px;
+  }
+  
+  .sidebar-item-card .sidebar-item-header {
+    gap: 6px;
+  }
+  
+  .sidebar-item-card .sidebar-item-stats {
+    margin-top: 6px;
+    padding-left: 20px;
+  }
+  
+  .sidebar-item-card .run-rate-text {
+    font-size: 11px;
+  }
+  
+  .sidebar-item-card .pass-rate-label {
+    font-size: 9px;
+  }
+  
+  .sidebar-item-card .sidebar-item-details {
+    font-size: 9px;
+    padding-left: 20px;
+  }
+  
+  .sidebar-item-card .sidebar-item-stats-row {
+    padding-left: 20px;
+  }
+  
+  .sidebar-item-card .ai-report-btn-row {
+    padding: 4px 6px;
+    font-size: 9px;
+    margin-top: 6px;
+  }
+  
+  .sidebar-item-card .ai-report-btn-row .ai-text {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+  
+  .sidebar-item-card .ai-report-btn-row .ai-label {
+    font-size: 9px;
+  }
+}
+
+/* =========================================== 
+   END NEW SIDEBAR ITEM CARD DESIGN 
+   =========================================== */
 
 /* Background Colors for Sidebar Items - Clean White Cards with Colored Borders */
 .nav-sidebar > div[ng-repeat] > sidebar-item > div[ng-class],
@@ -1725,12 +2401,12 @@ body.dark-mode .light-text {
 }
 
 .jobs-table tbody td:first-child a {
-  color: #333333 !important;
+  color: #337ab7 !important;
   text-decoration: none;
 }
 
 .jobs-table tbody td:first-child a:hover {
-  color: #000000 !important;
+  color: #23527c !important;
   text-decoration: underline;
 }
 
@@ -2248,7 +2924,13 @@ body.dark-mode .jobs-table tbody td:first-child * {
 }
 
 body.dark-mode .jobs-table tbody td:first-child a {
-  color: #e6dff4 !important;
+  color: #6db3f2 !important;
+  text-decoration: none;
+}
+
+body.dark-mode .jobs-table tbody td:first-child a:hover {
+  color: #8cc4f7 !important;
+  text-decoration: underline;
 }
 
 body.dark-mode .jobs-table tbody td:first-child span {
@@ -2573,13 +3255,7 @@ body.dark-mode .bar-segment {
 }
 
 .analysis-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #000000;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Base styles shared with .jobs-title above */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3530,14 +4206,14 @@ body.dark-mode .modal-close-btn:hover {
 }
 
 #exampleModalCenter tbody a {
-  color: #333333;
+  color: #337ab7;
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
 #exampleModalCenter tbody a:hover {
-  color: #000000;
+  color: #23527c;
   text-decoration: underline;
 }
 
@@ -3613,16 +4289,37 @@ body.dark-mode #exampleModalCenter .modal-footer .btn-primary:hover {
 }
 
 body.dark-mode #exampleModalCenter tbody a {
-  color: #9b8fff;
+  color: #6db3f2;
+  text-decoration: none;
 }
 
 body.dark-mode #exampleModalCenter tbody a:hover {
-  color: #b8a9ff;
+  color: #8cc4f7;
+  text-decoration: underline;
 }
 
 #job-name {
   max-width: none; 
   overflow-wrap: anywhere;
+}
+
+#job-name a {
+  color: #337ab7;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#job-name a:hover {
+  color: #23527c;
+  text-decoration: underline;
+}
+
+body.dark-mode #job-name a {
+  color: #6db3f2;
+}
+
+body.dark-mode #job-name a:hover {
+  color: #8cc4f7;
 }
 
 .rerun-button {

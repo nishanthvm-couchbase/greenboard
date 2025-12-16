@@ -55,6 +55,13 @@
                         scope.spin = false
                     })
 
+                    // Listen for sidebar filter changes (immediate response to platform/component clicks)
+                    scope.$on('sidebarFilterChanged', function() {
+                        // Use client-side filtering - instant, no HTTP request!
+                        var filteredBuilds = Data.getFilteredVersionBuilds();
+                        Timeline.update(filteredBuilds, id);
+                    });
+
                 }
               }
 

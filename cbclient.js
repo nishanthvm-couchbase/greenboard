@@ -230,24 +230,42 @@ module.exports = async function () {
         queryBucket: async function (bucket, queryStr) {
             return await _query(bucket, queryStr);
         },
-        queryBuilds: async function (bucket, version, testsFilter, buildsFilter) {
+        queryBuilds: async function (bucket, version, testsFilter, buildsFilter, filters) {
             // Query to get build document keys - we'll calculate totals from individual jobs
             var Q = "SELECT `build` FROM `greenboard` WHERE `build` LIKE '" + version + "%' " +
                 " AND type = '" + bucket + "' ORDER BY `build` DESC limit " + buildsFilter;
 
+            // Parse filters - expect comma-separated values
+            var platformFilters = filters && filters.platforms ? filters.platforms.split(',') : null;
+            var componentFilters = filters && filters.features ? filters.features.split(',') : null;
+
             // Calculate totals from individual jobs, excluding olderBuild and deleted jobs
-            // This matches how the sidebar calculates stats in datafactory.js
-            function calculateBuildTotals(buildDoc) {
+            // Also returns breakdown by OS and component for client-side filtering
+            function calculateBuildTotals(buildDoc, includeBreakdown) {
                 var totalCount = 0;
                 var failCount = 0;
                 var skipCount = 0;
+                var breakdown = {}; // { os: { component: { total, fail, skip } } }
                 
                 if (!buildDoc || !buildDoc.os) {
-                    return { totalCount: 0, failCount: 0, skipCount: 0 };
+                    return { totalCount: 0, failCount: 0, skipCount: 0, breakdown: {} };
                 }
                 
-                _.forEach(buildDoc.os, function(components, os) {
-                    _.forEach(components, function(jobs, component) {
+                _.forEach(buildDoc.os, function(components, osName) {
+                    // For breakdown, always include all; for totals, apply filter
+                    var includeInTotal = !platformFilters || platformFilters.includes(osName);
+                    
+                    if (includeBreakdown) {
+                        breakdown[osName] = breakdown[osName] || {};
+                    }
+                    
+                    _.forEach(components, function(jobs, componentName) {
+                        var includeComponent = !componentFilters || componentFilters.includes(componentName);
+                        
+                        var osTotalCount = 0;
+                        var osFailCount = 0;
+                        var osSkipCount = 0;
+                        
                         _.forEach(jobs, function(runs, jobName) {
                             if (!Array.isArray(runs)) return;
                             _.forEach(runs, function(run) {
@@ -255,15 +273,31 @@ module.exports = async function () {
                                 if (run.olderBuild === true || run.deleted === true) {
                                     return;
                                 }
-                                totalCount += (run.totalCount || 0);
-                                failCount += (run.failCount || 0);
-                                skipCount += (run.skipCount || 0);
+                                osTotalCount += (run.totalCount || 0);
+                                osFailCount += (run.failCount || 0);
+                                osSkipCount += (run.skipCount || 0);
                             });
-                });
+                        });
+                        
+                        // Store breakdown for client-side filtering
+                        if (includeBreakdown) {
+                            breakdown[osName][componentName] = {
+                                total: osTotalCount,
+                                fail: osFailCount,
+                                skip: osSkipCount
+                            };
+                        }
+                        
+                        // Add to totals if filters match
+                        if (includeInTotal && includeComponent) {
+                            totalCount += osTotalCount;
+                            failCount += osFailCount;
+                            skipCount += osSkipCount;
+                        }
                     });
                 });
                 
-                return { totalCount, failCount, skipCount };
+                return { totalCount, failCount, skipCount, breakdown };
             }
 
             async function queryBuild() {
@@ -299,17 +333,25 @@ module.exports = async function () {
                             }
                         }
                         
-                        // Calculate totals from individual jobs (excluding olderBuild/deleted)
-                        const totals = calculateBuildTotals(buildDoc);
+                        // Calculate totals - include breakdown only on initial load (no filters)
+                        var includeBreakdown = !platformFilters && !componentFilters;
+                        const totals = calculateBuildTotals(buildDoc, includeBreakdown);
                         
                         // Apply testsFilter on calculated totals
                         if (totals.totalCount >= testsFilter) {
                             var passed = totals.totalCount - totals.failCount - totals.skipCount;
-                            builds.push({
+                            var buildData = {
                                 Failed: totals.failCount,
                                 Passed: passed,
                                 build: buildInfo.build
-                            });
+                            };
+                            
+                            // Include breakdown for client-side filtering (only on initial load)
+                            if (includeBreakdown && totals.breakdown) {
+                                buildData.breakdown = totals.breakdown;
+                            }
+                            
+                            builds.push(buildData);
                         }
                     }
                     

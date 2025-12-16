@@ -1,19 +1,42 @@
-<div ng-class="bgColor()"  
-	   ng-click="toggleItem()"
-	   ng-style="{'--percentage': getRunPercentNum()}">
-	<span  class="custom-list-group-item" >
-          <a href="">
-            <i class="glyphicon" ng-class="glyphiconClass">
-            </i>
-             {{key}}
-            <a class="component-analytics" ng-click="$event.stopPropagation()" ng-if="type=='features' && getDashboardUrl()" target="_blank" href="{{getDashboardUrl()}}"><i class="glyphicon glyphicon-stats"></i></a>
-          	<span  class="testscore">{{getRunPercent()}}</span>
-            <button class="ai-report-btn" ng-click="openAIReport($event)" ng-if="type=='features'" title="AI Error Analysis Report">
-              <span class="ai-text">AI</span>
-              <i class="glyphicon glyphicon-file"></i>
-            </button>
-          </a>
-		<div class="scoredesc">pass: {{getNumOrPerc("passed")}}, fail: {{getNumOrPerc("failed")}} skip: {{getNumOrPerc("skipped")}}
-      <span ng-if="asNum()">pend: {{getNumOrPerc("pending")}}  total: {{getNumOrPerc("total")}}</span></div>
-	</span>
+<div class="sidebar-item-card" 
+     ng-class="bgColor()"
+     ng-click="toggleItem()">
+  
+  <!-- Content layer -->
+  <div class="sidebar-item-content">
+    <!-- Top row: checkbox and name only - full width -->
+    <div class="sidebar-item-header">
+      <i class="glyphicon" ng-class="glyphiconClass"></i>
+      <span class="item-name">{{key}}</span>
+      <a class="component-analytics" ng-click="$event.stopPropagation()" ng-if="type=='features' && getDashboardUrl()" target="_blank" href="{{getDashboardUrl()}}">
+        <i class="glyphicon glyphicon-stats"></i>
+      </a>
+    </div>
+    
+    <!-- Stats row: run rate + pass rate together -->
+    <div class="sidebar-item-stats-row">
+      <span class="run-rate-text" ng-class="{'num-mode': asNum()}">
+        <span ng-if="!asNum()">Run Rate: </span>
+        <span ng-if="asNum()">Ran: </span>
+        {{getRunPercent()}}
+      </span>
+      <span class="pass-rate-group">
+        <span class="pass-rate-label" ng-if="!asNum()">PASS RATE</span>
+        <span class="pass-rate-label" ng-if="asNum()">PASSED</span>
+        <span class="pass-rate-value" ng-class="{'num-mode': asNum()}">{{getPassPercent()}}</span>
+      </span>
+    </div>
+    
+    <!-- Details row -->
+    <div class="sidebar-item-details">
+      Fail: {{getNumOrPerc("failed")}}<span ng-if="asNum()"> | Pend: {{getNumOrPerc("pending")}}</span>
+    </div>
+    
+    <!-- AI button - separate row -->
+    <button class="ai-report-btn-row" ng-click="openAIReport($event)" ng-if="type=='features'" title="AI Error Analysis Report">
+      <span class="ai-text">AI</span>
+      <i class="glyphicon glyphicon-file"></i>
+      <span class="ai-label">Error Analysis</span>
+    </button>
+  </div>
 </div>

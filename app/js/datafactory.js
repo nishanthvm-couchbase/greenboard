@@ -1,8 +1,8 @@
 angular.module('svc.data', [])
     .value("DEFAULT_FILTER_BY", 2000)
     .value("DEFAULT_BUILDS_FILTER_BY", 10)
-    .service('Data', ['$location', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
-        function ($location, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
+    .service('Data', ['$location', '$rootScope', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
+        function ($location, $rootScope, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
 
             _versions = []
             _target = "server"
@@ -209,6 +209,60 @@ angular.module('svc.data', [])
                     return buildNameWithVersion()
                 },
                 getVersionBuilds: getVersionBuildByFilter,
+                getFilteredVersionBuilds: function() {
+                    // Calculate filtered builds using stored breakdown data (instant, no HTTP)
+                    // Only filter by PLATFORMS - features/components do not affect bar chart
+                    var activeFilters = this.getActiveFilters();
+                    var platformFilters = activeFilters.platforms ? activeFilters.platforms.split(',') : null;
+                    
+                    // If no platform filters active, return original builds
+                    if (!platformFilters) {
+                        return getVersionBuildByFilter();
+                    }
+                    
+                    var builds = getVersionBuildByFilter();
+                    var filteredBuilds = [];
+                    
+                    builds.forEach(function(build) {
+                        // If no breakdown data, use original values
+                        if (!build.breakdown) {
+                            filteredBuilds.push({
+                                build: build.build,
+                                Passed: build.Passed,
+                                Failed: build.Failed
+                            });
+                            return;
+                        }
+                        
+                        // Calculate filtered totals from breakdown (platforms only)
+                        var totalCount = 0;
+                        var failCount = 0;
+                        var skipCount = 0;
+                        
+                        _.forEach(build.breakdown, function(components, osName) {
+                            // Apply platform filter only
+                            if (platformFilters && !platformFilters.includes(osName)) {
+                                return;
+                            }
+                            
+                            // Include all components for this platform
+                            _.forEach(components, function(stats, componentName) {
+                                totalCount += stats.total || 0;
+                                failCount += stats.fail || 0;
+                                skipCount += stats.skip || 0;
+                            });
+                        });
+                        
+                        var passed = totalCount - failCount - skipCount;
+                        filteredBuilds.push({
+                            build: build.build,
+                            Passed: passed,
+                            Failed: failCount
+                        });
+                    });
+                    
+                    return filteredBuilds;
+                },
                 toggleItem: function(key, type, disabled){
 
                     // check if item is being disabled
@@ -238,6 +292,11 @@ angular.module('svc.data', [])
 
                         // enabling item for visibility
                         enableItem(key, type)
+                    }
+                    
+                    // Broadcast filter change event for immediate bar chart update (platforms only)
+                    if (type === 'platforms') {
+                        $rootScope.$broadcast('sidebarFilterChanged');
                     }
                 },
                 setSideBarItems: function(items){
@@ -364,6 +423,11 @@ angular.module('svc.data', [])
                             enableItem(item.key, type)
                         }
                     })
+                    
+                    // Broadcast filter change event for immediate bar chart update (platforms only)
+                    if (type === 'platforms') {
+                        $rootScope.$broadcast('sidebarFilterChanged');
+                    }
                 },
                 getBuildFilter: function(){
                     return _filterBy
@@ -408,6 +472,34 @@ angular.module('svc.data', [])
                 },
                 getJobsPage: function() {
                     return _jobsPage;
+                },
+                getActiveFilters: function() {
+                    // Returns currently active (enabled) sidebar filters for API calls
+                    var activeFilters = {};
+                    
+                    // Get active platforms
+                    if (_sideBarItems.platforms) {
+                        var activePlatforms = _sideBarItems.platforms
+                            .filter(function(item) { return !item.disabled; })
+                            .map(function(item) { return item.key; });
+                        // Only include if not all are selected (i.e., some filtering is happening)
+                        if (activePlatforms.length > 0 && activePlatforms.length < _sideBarItems.platforms.length) {
+                            activeFilters.platforms = activePlatforms.join(',');
+                        }
+                    }
+                    
+                    // Get active features/components
+                    if (_sideBarItems.features) {
+                        var activeFeatures = _sideBarItems.features
+                            .filter(function(item) { return !item.disabled; })
+                            .map(function(item) { return item.key; });
+                        // Only include if not all are selected
+                        if (activeFeatures.length > 0 && activeFeatures.length < _sideBarItems.features.length) {
+                            activeFilters.features = activeFeatures.join(',');
+                        }
+                    }
+                    
+                    return activeFilters;
                 }
             }
 

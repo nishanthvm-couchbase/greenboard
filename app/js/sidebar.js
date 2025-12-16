@@ -98,9 +98,27 @@ angular.module('app.sidebar', [])
 
   			scope.getRunPercent = function(){
   				if(!scope.disabled){
-	  				return scope.stats.percStats.run
+  					var asNum = scope.asNum();
+  					if(asNum) {
+  						// Show as "X / Y" format (ran / total)
+  						var stats = scope.stats.absStats;
+  						var ran = stats.passed + stats.failed + stats.skipped;
+  						return ran + ' / ' + stats.total;
+  					}
+	  				return scope.stats.percStats.run;
 	  			}
 			  }
+			  
+			scope.getPassPercent = function(){
+				if(!scope.disabled){
+					var asNum = scope.asNum();
+					if(asNum) {
+						// Show absolute passed count
+						return scope.stats.absStats.passed;
+					}
+					return scope.stats.percStats.passed;
+				}
+			}
 			  
 			scope.getRunPercentNum = function(){
 				if(!scope.disabled && scope.stats && scope.stats.percStats){
@@ -111,6 +129,16 @@ angular.module('app.sidebar', [])
 						return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
 					}
 					var num = parseFloat(runPerc);
+					return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+				}
+				return 0;
+			}
+			
+			scope.getPassPercentNum = function(){
+				if(!scope.disabled && scope.stats && scope.stats.percStats){
+					var passPerc = scope.stats.percStats.passedRaw;
+					if(!passPerc && passPerc !== 0) return 0;
+					var num = parseFloat(passPerc);
 					return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
 				}
 				return 0;

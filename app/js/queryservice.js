@@ -9,13 +9,30 @@ angular.module('svc.query', [])
 		        				return response.data
 		        			})
 			},
-			getBuilds: function(target, version, testsFilter, buildsFilter){
-				var url = ["builds", target, version, testsFilter, buildsFilter].join("/")
-		        return $http({"url": url, cache: true})
-		        			.then(function(response){		
-		        				return response.data
-		        			})				
-			},
+		getBuilds: function(target, version, testsFilter, buildsFilter, filters){
+			var url = ["builds", target, version, testsFilter, buildsFilter].join("/")
+			
+			// Add filters as query parameters if provided
+			if (filters && (filters.platforms || filters.features)) {
+				var params = [];
+				if (filters.platforms) {
+					params.push("platforms=" + encodeURIComponent(filters.platforms));
+				}
+				if (filters.features) {
+					params.push("features=" + encodeURIComponent(filters.features));
+				}
+				if (params.length > 0) {
+					url += "?" + params.join("&");
+				}
+			}
+			
+			// Don't cache when filters are applied (dynamic data)
+			var cacheOption = !(filters && (filters.platforms || filters.features));
+	        return $http({"url": url, cache: cacheOption})
+	        			.then(function(response){		
+	        				return response.data
+	        			})				
+		},
 			getJobs: function(build, target){
 				var url = ["jobs", build, target].join("/")
 		        return $http({"url": url, cache: true})
