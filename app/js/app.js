@@ -13,7 +13,8 @@ var app = angular.module('greenBoard', [
     'app.infobar',
     'app.compare',
     'app.darkmode',
-    'app.aireport'
+    'app.aireport',
+    'app.views'
 ]);
 
 app.run(['$location', '$rootScope', 'Data', function($location, $rootScope, Data){

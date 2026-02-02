@@ -51,15 +51,67 @@
         </div>
       </div>
     </div>
+    <!-- Floating Action Button for Views -->
+    <div class="fab-container" ng-class="{'fab-expanded': fabExpanded}" ng-controller="ViewsCtrl">
+      <!-- Backdrop overlay when FAB is expanded -->
+      <div class="fab-backdrop" ng-if="fabExpanded" ng-click="toggleFab()"></div>
+      
+      <!-- Toast notification -->
+      <div class="fab-toast" ng-class="{'show': toast && toast.show}">
+        <i class="fa" ng-class="{'fa-check-circle': !toast.isError, 'fa-exclamation-circle': toast.isError}"></i>
+        <span>{{toast.message}}</span>
+      </div>
+      
+      <div class="fab-menu">
+        <!-- Saved Views -->
+        <div class="fab-views-section" ng-if="views.length > 0">
+          <div class="fab-views-header">My Views</div>
+          <button class="fab-option fab-view-item" ng-repeat="view in views track by view.id" ng-click="applyView(view)" title="Apply view: {{view.name}}">
+            <i class="fa fa-file-o"></i>
+            <span>{{view.name}}</span>
+            <button class="fab-view-delete" ng-click="deleteView(view.id, $event); $event.stopPropagation()" title="Delete view">
+              <i class="fa fa-times"></i>
+            </button>
+          </button>
+        </div>
+        
+        <!-- View Actions -->
+        <div class="fab-views-actions">
+          <button class="fab-option" ng-click="openSaveViewModal()" title="Save Current View">
+            <i class="fa fa-save"></i>
+            <span>Save View</span>
+          </button>
+          <button class="fab-option" ng-click="openShareViewModal()" title="Share View">
+            <i class="fa fa-share-alt"></i>
+            <span>Share View</span>
+          </button>
+          <button class="fab-option" ng-click="openImportViewModal()" title="Import View">
+            <i class="fa fa-download"></i>
+            <span>Import View</span>
+          </button>
+          <button class="fab-option fab-danger" ng-if="views.length > 0" ng-click="clearAllViews()" title="Clear All Views">
+            <i class="fa fa-trash"></i>
+            <span>Clear All</span>
+          </button>
+        </div>
+      </div>
+      <button class="fab-main" ng-click="toggleFab()" title="Views">
+        <i class="fa" ng-class="{'fa-times': fabExpanded, 'fa-bookmark': !fabExpanded}"></i>
+      </button>
+    </div>
+
     <div class="jobs-card">
       <div class="jobs-header">
         <h2 class="jobs-title">Jobs</h2>
+        <button class="btn btn-default resource-jobs-btn" ng-click="openJobsLinksModal()" title="View High Resource Intensive Jobs">
+          <i class="fa fa-server"></i> High Resource Jobs
+        </button>
       </div>
       <div class="jobs-content">
         <div class="jobs-search-wrapper">
           <input type="text" class="jobs-search-input" id="search" placeholder="Search name, bugs and triage..." ng-model-options='{ debounce: 500 }' ng-model="search" ng-change="onSearchChange()">
         </div>
-        <pagination></pagination>
+        <pagination class="top-pagination"></pagination>
         <!-- Nav tabs -->
         <div class="jobs-tabs-wrapper">
           <ul class="jobs-tabs" role="tablist" id="jobTabs">
@@ -90,7 +142,6 @@
                   <th><a href="" ng-click="predicate = 'timestamp || 0'; reverse=!reverse">Run Date (UTC)</a></th>
                   <th><a href="" ng-click="predicate = 'runCount'; reverse=!reverse">Runs</a></th>
                   <th ng-show="targetBy==='server'"><a href="" ng-click="predicate = 'servers.length'; reverse=!reverse">Servers</a></th>
-                  <th><a href="" ng-click="predicate = 'bugs'; reverse=!reverse">Manual Triage</a></th>
                   <th class="claim-col"><a href="" ng-click="predicate = 'claim'; reverse=!reverse">Auto Triage</a></th>
                 </tr>
               </thead>
@@ -109,13 +160,20 @@
                   <td>{{msToDate(job.timestamp)}}</td>
                   <td>{{job.runCount}}</td>
                   <td ng-show="targetBy==='server'">{{job.servers.length}}</td>
-                  <td><triage-cell job="job"></claim-cell></td>
-                  <td><claim-test jobName="job.name" claim="job.claim"></claim></td>
+                  <td class="auto-triage-cell claim-col">
+                    <button ng-if="job.claim && job.claim.trim()" 
+                            class="btn btn-default show-full-claim auto-triage-btn" 
+                            ng-click="openAutoTriageModal(job)"
+                            title="View Auto Triage">
+                      <i class="fa fa-info-circle"></i>
+                    </button>
+                    <span ng-if="!job.claim || !job.claim.trim()" class="text-muted">-</span>
+                  </td>
                 </tr>
               </tbody>
               </table>
             </div>
-            <pagination></pagination>
+            <pagination class="bottom-pagination"></pagination>
           </div>
         </div>
       </div>
@@ -189,6 +247,72 @@
 </div>
 
 <ai-report-modal></ai-report-modal>
+
+<!-- Jobs Links Modal -->
+<div class="modal fade" id="jobsLinksModal" tabindex="-1" role="dialog" aria-labelledby="jobsLinksModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document" style="max-width: 90%;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h2 class="modal-title text-center" id="jobsLinksModalTitle">High Resource Intensive Jobs</h2>
+        <p class="text-center" style="margin-top: 8px; color: #666; font-size: 14px;">Jobs using 7+ servers ({{jobsLinksData.length}} total)</p>
+      </div>
+      <div class="modal-body">
+        <div class="jobs-links-table-wrapper">
+          <table class="table table-striped table-bordered jobs-links-table">
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 65%;">Job Name</th>
+                <th style="width: 30%;">Servers</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="job in jobsLinksData">
+                <td>{{$index + 1}}</td>
+                <td>
+                  <a ng-if="job.url" href="{{job.url}}" target="_blank" class="job-name-link">
+                    {{job.displayName || job.name}}
+                  </a>
+                  <span ng-if="!job.url" class="job-name-text">{{job.displayName || job.name}}</span>
+                </td>
+                <td class="text-center">
+                  <span class="servers-badge">{{job.serversCount || 0}}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Auto Triage Modal -->
+<div class="modal fade" id="autoTriageModal" tabindex="-1" role="dialog" aria-labelledby="autoTriageModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document" style="max-width: 80%;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <h2 class="modal-title text-center" id="autoTriageModalTitle">Auto Triage</h2>
+        <p class="text-center" style="margin-top: 8px; color: #666; font-size: 14px;">{{autoTriageJobName}}</p>
+      </div>
+      <div class="modal-body">
+        <div class="auto-triage-content" ng-bind-html="autoTriageContent"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Trend Modal -->
 <div class="modal fade" id="trendModal" tabindex="-1" role="dialog" aria-labelledby="trendModalTitle" aria-hidden="true">

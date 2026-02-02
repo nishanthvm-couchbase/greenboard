@@ -25,6 +25,12 @@ angular.module('app.main', [])
 
             // update target versions when drop down target changes
             $scope.changeTarget = function(target){
+                // Redirect to Capella Greenboard if Capella is selected
+                if(target == 'capella'){
+                    window.location.href = 'https://greenboard.sc.couchbase.com:4001/';
+                    return;
+                }
+                
                 if(target == 'cblite' || target == 'sync_gateway'){
                     Data.setBuildFilter(0)
                 }
@@ -277,6 +283,171 @@ angular.module('app.main', [])
                     end = numPages;
                 }
                 return _.range(start, end);
+            }
+
+            // FAB (Floating Action Button) state
+            $scope.showCopyToast = false;
+
+            // Auto Triage Modal
+            $scope.autoTriageJobName = '';
+            $scope.autoTriageContent = '';
+            $scope.openAutoTriageModal = function(job) {
+                $scope.autoTriageJobName = job.displayName || job.name;
+                var claimText = job.claim || '';
+                // Format the claim - preserve line breaks and format for display
+                // Convert <br> tags to actual line breaks for better formatting
+                claimText = claimText.replace(/<br\s*\/?>/gi, '\n');
+                // Apply formatClaim for JIRA links
+                $scope.autoTriageContent = formatClaim(claimText);
+                $('#autoTriageModal').modal('show');
+            };
+
+            // Jobs Links Modal - Show all jobs with links and server counts
+            $scope.jobsLinksData = [];
+            $scope.openJobsLinksModal = function() {
+                // Get all jobs from current panel
+                var allJobs = $scope.panelTabs[$scope.activePanel].jobs || [];
+                
+                // Prepare data for the modal - filter jobs with >= 7 servers
+                var jobsData = allJobs.map(function(job) {
+                    return {
+                        name: job.name,
+                        displayName: job.displayName,
+                        url: job.url + (job.build_id || ''),
+                        serversCount: (job.servers && job.servers.length) || 0
+                    };
+                }).filter(function(job) {
+                    // Only show jobs with >= 7 servers
+                    return job.serversCount >= 7;
+                }).sort(function(a, b) {
+                    // Sort in descending order by server count
+                    return b.serversCount - a.serversCount;
+                });
+                
+                $scope.jobsLinksData = jobsData;
+                
+                // Open the modal
+                $('#jobsLinksModal').modal('show');
+            };
+
+            // Show toast notification for copy jobs
+            $scope.showCopyToast = false;
+            $scope.showToast = function() {
+                $scope.showCopyToast = true;
+                setTimeout(function() {
+                    $scope.showCopyToast = false;
+                    $scope.$apply();
+                }, 3000);
+            };
+
+            // Copy visible job names to clipboard
+            $scope.copyVisibleJobNames = function() {
+                try {
+                    // Get all jobs from current panel
+                    var allJobs = $scope.panelTabs[$scope.activePanel].jobs || [];
+                    
+                    // Apply sorting if predicate is set (matching the template's orderBy)
+                    var sortedJobs = allJobs;
+                    if ($scope.predicate) {
+                        sortedJobs = _.sortBy(allJobs, function(job) {
+                            // Handle complex predicates like 'totalCount - failCount - skipCount'
+                            if ($scope.predicate === 'totalCount - failCount - skipCount') {
+                                return (job.totalCount || 0) - (job.failCount || 0) - (job.skipCount || 0);
+                            } else if ($scope.predicate === 'failCount || 0') {
+                                return job.failCount || 0;
+                            } else if ($scope.predicate === 'pending || totalCount') {
+                                return job.pending || job.totalCount || 0;
+                            } else if ($scope.predicate === 'totalDuration || 0') {
+                                return job.totalDuration || 0;
+                            } else if ($scope.predicate === 'timestamp || 0') {
+                                return job.timestamp || 0;
+                            } else if ($scope.predicate === 'servers.length') {
+                                return (job.servers && job.servers.length) || 0;
+                            } else if ($scope.predicate.indexOf('variants.') === 0) {
+                                var variantKey = $scope.predicate.replace('variants.', '');
+                                return (job.variants && job.variants[variantKey]) || '';
+                            } else {
+                                return _.get(job, $scope.predicate, '');
+                            }
+                        });
+                        if ($scope.reverse) {
+                            sortedJobs = sortedJobs.reverse();
+                        }
+                    }
+                    
+                    // Get visible jobs based on pagination (matching limitTo filter)
+                    var startIndex = $scope.jobsPage * $scope.jobsPerPage;
+                    var endIndex = Math.min(startIndex + $scope.jobsPerPage, sortedJobs.length);
+                    var visibleJobs = sortedJobs.slice(startIndex, endIndex);
+                    
+                    // Extract job names - use job.name (the actual job name, not displayName)
+                    var jobNames = visibleJobs.map(function(job) {
+                        return job.name || '';
+                    }).filter(function(name) {
+                        return name && name.trim() !== '';
+                    });
+                    
+                    if (jobNames.length === 0) {
+                        alert('No jobs to copy');
+                        return;
+                    }
+                    
+                    // Strip job names: remove everything before first underscore and everything from "bucket_storage" onwards
+                    var strippedJobNames = jobNames.map(function(jobName) {
+                        // Find first underscore
+                        var firstUnderscoreIndex = jobName.indexOf('_');
+                        if (firstUnderscoreIndex === -1) {
+                            // No underscore found, return as is
+                            return jobName;
+                        }
+                        
+                        // Take everything after first underscore
+                        var afterUnderscore = jobName.substring(firstUnderscoreIndex + 1);
+                        
+                        // Find "bucket_storage" (case-insensitive)
+                        var bucketStorageIndex = afterUnderscore.toLowerCase().indexOf('bucket_storage');
+                        if (bucketStorageIndex === -1) {
+                            // No "bucket_storage" found, return everything after first underscore
+                            return afterUnderscore;
+                        }
+                        
+                        // Take everything before "bucket_storage"
+                        return afterUnderscore.substring(0, bucketStorageIndex).trim();
+                    });
+                    
+                    // Join with commas (no spaces)
+                    var jobNamesText = strippedJobNames.join(',');
+                    
+                    // Copy to clipboard
+                    var textArea = document.createElement('textarea');
+                    textArea.value = jobNamesText;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    var successful = false;
+                    try {
+                        successful = document.execCommand('copy');
+                    } catch (err) {
+                        console.error('Fallback: Copy command failed', err);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        // Show toast notification
+                        $scope.showToast();
+                    } else {
+                        // Fallback: show in prompt
+                        prompt('Copy these job names:', jobNamesText);
+                    }
+                } catch (err) {
+                    console.error('Error copying job names:', err);
+                    alert('Failed to copy job names. Please try again.');
+                }
             }
             function resetPage() {
                 Data.setJobsPage(0);
@@ -1354,6 +1525,25 @@ angular.module('app.main', [])
                 scope.setPage = scope.$parent.setPage;
                 scope.jobsPerPageChoices = [20, 50, 100, 500, 1000, 'All'];
                 scope.jobsPerPage = Data.getJobsPerPage();
+                
+                // Check if this is top pagination (has class 'top-pagination')
+                scope.isTopPagination = element.hasClass('top-pagination');
+                
+                // Initialize copy button state
+                scope.copyButtonCopied = false;
+                
+                // Override copyVisibleJobNames to add visual feedback
+                scope.copyVisibleJobNames = function() {
+                    if (scope.$parent.copyVisibleJobNames) {
+                        scope.$parent.copyVisibleJobNames();
+                        // Add visual feedback
+                        scope.copyButtonCopied = true;
+                        setTimeout(function() {
+                            scope.copyButtonCopied = false;
+                            scope.$apply();
+                        }, 2000);
+                    }
+                };
 
                 scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
                     scope.jobsPage = jobsPage;
@@ -1478,6 +1668,234 @@ angular.module('app.main', [])
                 }
             }
         }
+    }])
+
+    .controller("ViewsCtrl", ['$scope', 'Views', '$timeout', '$rootScope', function($scope, Views, $timeout, $rootScope) {
+        // FAB state
+        $scope.fabExpanded = false;
+        
+        // Load views
+        $scope.views = Views.getAll();
+        
+        // Share functions on $rootScope so modals can access them
+        $rootScope.viewsCtrl = {
+            saveCurrentView: null,
+            openSaveViewModal: null,
+            openShareViewModal: null,
+            openImportViewModal: null,
+            selectViewToShare: null,
+            copyShareCode: null,
+            copyShareUrl: null,
+            importView: null,
+            refreshViews: null,
+            showToast: null
+        };
+        
+        // Toggle FAB
+        $scope.toggleFab = function() {
+            $scope.fabExpanded = !$scope.fabExpanded;
+            if ($scope.fabExpanded) {
+                document.body.classList.add('fab-overlay-active');
+                // Refresh views when opening
+                $scope.refreshViews();
+            } else {
+                document.body.classList.remove('fab-overlay-active');
+            }
+        };
+        
+        // Refresh views list
+        $scope.refreshViews = function() {
+            $scope.views = Views.getAll();
+            if ($rootScope.viewsCtrl) {
+                $rootScope.viewsCtrl.refreshViews = $scope.refreshViews;
+            }
+        };
+        
+        // Apply a view
+        $scope.applyView = function(view) {
+            var result = Views.apply(view);
+            if (result.success) {
+                // View opens in new tab, no feedback needed
+                $scope.toggleFab(); // Close FAB after applying
+            } else {
+                $scope.showToast('Failed to apply view: ' + (result.error || 'Unknown error'), true);
+            }
+        };
+        
+        // Delete a view
+        $scope.deleteView = function(viewId, $event) {
+            if ($event) {
+                $event.preventDefault();
+                $event.stopPropagation();
+            }
+            
+            if (confirm('Are you sure you want to delete this view?')) {
+                var result = Views.delete(viewId);
+                if (result.success) {
+                    // Use $timeout to ensure DOM updates after deletion
+                    $timeout(function() {
+                        $scope.refreshViews();
+                    }, 0);
+                    $scope.showToast('View deleted successfully!');
+                } else {
+                    $scope.showToast('Failed to delete view: ' + (result.error || 'Unknown error'), true);
+                }
+            }
+        };
+        
+        // Clear all views
+        $scope.clearAllViews = function() {
+            if (confirm('Are you sure you want to delete ALL views? This cannot be undone.')) {
+                var result = Views.clearAll();
+                if (result.success) {
+                    $scope.refreshViews();
+                    $scope.showToast('All views cleared!');
+                } else {
+                    $scope.showToast('Failed to clear views: ' + (result.error || 'Unknown error'), true);
+                }
+            }
+        };
+        
+        // Save current view modal
+        $scope.openSaveViewModal = function() {
+            $scope.newViewName = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.saveCurrentView = $scope.saveCurrentView;
+            $rootScope.viewsCtrl.openSaveViewModal = $scope.openSaveViewModal;
+            $rootScope.newViewName = '';
+            $('#saveViewModal').modal('show');
+        };
+        
+        $scope.saveCurrentView = function() {
+            var viewName = $rootScope.newViewName || '';
+            if (!viewName || viewName.trim() === '') {
+                alert('Please enter a view name');
+                return;
+            }
+            
+            var result = Views.saveCurrent(viewName.trim());
+            if (result.success) {
+                $('#saveViewModal').modal('hide');
+                $rootScope.newViewName = '';
+                // Use $timeout to ensure DOM updates after save
+                $timeout(function() {
+                    $scope.refreshViews();
+                }, 0);
+                $scope.showToast('View "' + viewName + '" saved successfully!');
+            } else {
+                alert('Failed to save view: ' + (result.error || 'Unknown error'));
+            }
+        };
+        
+        // Share functions on rootScope
+        $rootScope.viewsCtrl.saveCurrentView = $scope.saveCurrentView;
+        $rootScope.viewsCtrl.openSaveViewModal = $scope.openSaveViewModal;
+        
+        // Share view modal
+        $scope.openShareViewModal = function() {
+            $scope.shareViewList = Views.getAll();
+            $scope.selectedShareView = null;
+            $scope.shareCode = '';
+            $scope.shareUrl = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.openShareViewModal = $scope.openShareViewModal;
+            $rootScope.viewsCtrl.selectViewToShare = $scope.selectViewToShare;
+            $rootScope.viewsCtrl.copyShareCode = $scope.copyShareCode;
+            $rootScope.viewsCtrl.copyShareUrl = $scope.copyShareUrl;
+            $rootScope.shareViewList = $scope.shareViewList;
+            $rootScope.selectedShareView = null;
+            $rootScope.shareCode = '';
+            $rootScope.shareUrl = '';
+            $('#shareViewModal').modal('show');
+        };
+        
+        $scope.selectViewToShare = function(view) {
+            if (!view) return;
+            $rootScope.selectedShareView = view;
+            var result = Views.share(view);
+            if (result.success) {
+                $rootScope.shareCode = result.code;
+                $rootScope.shareUrl = result.url;
+            } else {
+                alert('Failed to generate share code: ' + (result.error || 'Unknown error'));
+            }
+        };
+        
+        $scope.copyShareCode = function() {
+            var codeInput = document.getElementById('shareCodeInput');
+            codeInput.select();
+            document.execCommand('copy');
+            $scope.showToast('Share code copied to clipboard!');
+        };
+        
+        $scope.copyShareUrl = function() {
+            var urlInput = document.getElementById('shareUrlInput');
+            urlInput.select();
+            document.execCommand('copy');
+            $scope.showToast('Share URL copied to clipboard!');
+        };
+        
+        // Import view modal
+        $scope.openImportViewModal = function() {
+            $scope.importCode = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.openImportViewModal = $scope.openImportViewModal;
+            $rootScope.viewsCtrl.importView = $scope.importView;
+            $rootScope.importCode = '';
+            $('#importViewModal').modal('show');
+        };
+        
+        $scope.importView = function() {
+            var importCode = $rootScope.importCode || '';
+            if (!importCode || importCode.trim() === '') {
+                alert('Please enter a view code');
+                return;
+            }
+            
+            var result = Views.import(importCode.trim());
+            if (result.success) {
+                $scope.refreshViews();
+                $('#importViewModal').modal('hide');
+                $scope.showToast('View imported successfully!');
+                $rootScope.importCode = '';
+                
+                // Optionally apply the imported view
+                if (confirm('Would you like to apply this view now?')) {
+                    $scope.applyView(result.view);
+                }
+            } else {
+                alert('Failed to import view: ' + (result.error || 'Invalid view code'));
+            }
+        };
+        
+        // Share remaining functions on rootScope
+        $rootScope.viewsCtrl.openShareViewModal = $scope.openShareViewModal;
+        $rootScope.viewsCtrl.openImportViewModal = $scope.openImportViewModal;
+        $rootScope.viewsCtrl.selectViewToShare = $scope.selectViewToShare;
+        $rootScope.viewsCtrl.copyShareCode = $scope.copyShareCode;
+        $rootScope.viewsCtrl.copyShareUrl = $scope.copyShareUrl;
+        $rootScope.viewsCtrl.importView = $scope.importView;
+        $rootScope.viewsCtrl.showToast = $scope.showToast;
+        
+        // Toast notification
+        $scope.showToast = function(message, isError) {
+            $scope.toast = { message: message, isError: isError || false, show: true };
+            $timeout(function() {
+                $scope.toast.show = false;
+            }, 3000);
+        };
+        
+        // Check URL for view code on load
+        $timeout(function() {
+            var importedView = Views.checkUrlForView();
+            if (importedView) {
+                $scope.refreshViews();
+                $scope.showToast('View imported from URL: ' + importedView.name);
+            }
+        }, 500);
     }])
 
 

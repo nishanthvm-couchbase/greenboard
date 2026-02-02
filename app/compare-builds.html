@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compare Builds - Greenboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #8b5cf6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: #1a1a1a;
+            padding: 24px 40px;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header h1 i {
+            color: #60a5fa;
+        }
+
+        .header-subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .back-link {
+            color: #94a3b8;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: white;
+        }
+
+        /* Theme Toggle */
+        .theme-toggle-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .theme-toggle-text {
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .theme-toggle-container {
+            cursor: pointer;
+        }
+
+        .theme-toggle-label {
+            background-color: #333;
+            width: 50px;
+            height: 26px;
+            border-radius: 50px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 6px;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle-label.dark-active {
+            background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+        }
+
+        .theme-toggle-label .fa-moon-o,
+        .theme-toggle-label .fa-sun-o {
+            font-size: 12px;
+            z-index: 2;
+            transition: opacity 0.2s ease;
+        }
+
+        .theme-toggle-label .fa-moon-o {
+            color: #f1c40f;
+        }
+
+        .theme-toggle-label .fa-sun-o {
+            color: #f39c12;
+        }
+
+        .theme-toggle-ball {
+            background-color: #fff;
+            width: 20px;
+            height: 20px;
+            position: absolute;
+            left: 3px;
+            top: 3px;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .theme-toggle-label.dark-active .theme-toggle-ball {
+            transform: translateX(24px);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 32px 40px;
+        }
+
+        /* Selection Panel */
+        .selection-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title i {
+            color: var(--accent-primary);
+        }
+
+        .selection-grid {
+            display: grid;
+            grid-template-columns: 200px 280px 1fr auto;
+            gap: 24px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input {
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        select:hover, input:hover {
+            border-color: var(--accent-primary);
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Build Chips */
+        .builds-selector {
+            flex: 1;
+        }
+
+        .builds-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            min-height: 48px;
+            background: var(--bg-tertiary);
+        }
+
+        .build-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--accent-primary);
+            color: white;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .build-chip .remove {
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .build-chip .remove:hover {
+            opacity: 1;
+        }
+
+        .add-build-btn {
+            padding: 6px 14px;
+            background: transparent;
+            border: 2px dashed var(--border-color);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-build-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        /* Compare Button */
+        .compare-btn {
+            padding: 12px 32px;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+        }
+
+        .compare-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .compare-btn:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Build Dropdown Modal */
+        .build-dropdown {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 24px;
+            width: 400px;
+            max-height: 500px;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            display: none;
+        }
+
+        .build-dropdown.active {
+            display: block;
+        }
+
+        .build-dropdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .build-dropdown-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .build-dropdown-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .build-list {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .build-list-loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+            gap: 12px;
+        }
+
+        .build-list-loading i {
+            font-size: 24px;
+            color: var(--accent-primary);
+        }
+
+        .build-list-loading span {
+            font-size: 14px;
+        }
+
+        .build-list-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .build-list-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .build-list-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .build-list-item.selected {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-primary);
+        }
+
+        .build-list-item .pass-rate {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* Filters Panel */
+        .filters-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 24px 32px;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            display: none;
+        }
+
+        .filters-panel.active {
+            display: block;
+        }
+
+        .filters-row {
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .filter-group h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .filter-chip {
+            padding: 6px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .filter-chip.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .filter-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .filter-toggle:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        /* Visualization Section */
+        .viz-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .viz-card {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .viz-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .viz-card h3 i {
+            color: var(--accent-primary);
+        }
+
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        /* Summary Stats */
+        .summary-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .summary-row.summary-row-single {
+            grid-template-columns: 1fr;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }
+
+        .stat-card .stat-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .stat-card.success .stat-value { color: var(--success); }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+
+        /* Comparison Table */
+        .table-section {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .table-header h3 i {
+            color: var(--accent-primary);
+        }
+
+        .table-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .search-input {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 13px;
+            width: 250px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 700px;
+        }
+
+        .comparison-table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .comparison-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .comparison-table th {
+            background: var(--bg-tertiary);
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .comparison-table th.build-header {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            color: white;
+            text-align: center;
+            min-width: 180px;
+            width: 180px;
+        }
+
+        .comparison-table th.build-header .build-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        .comparison-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .comparison-table tr:hover td {
+            background: var(--bg-tertiary);
+        }
+
+        .job-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .job-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .build-cell {
+            text-align: center;
+            background: var(--bg-secondary);
+            min-width: 180px;
+            width: 180px;
+        }
+
+        .build-cell.empty {
+            background: repeating-linear-gradient(
+                45deg,
+                var(--bg-tertiary),
+                var(--bg-tertiary) 5px,
+                var(--bg-secondary) 5px,
+                var(--bg-secondary) 10px
+            );
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .build-cell .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            font-size: 11px;
+        }
+
+        .build-cell .stat {
+            padding: 3px 2px;
+            border-radius: 3px;
+        }
+
+        .build-cell .stat.pass {
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .build-cell .stat.fail {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .build-cell .stat.total {
+            color: var(--accent-primary);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .build-cell .meta-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            flex-wrap: nowrap;
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .result-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .result-badge.success { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .result-badge.failure { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .result-badge.pending { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+
+        /* S3 Link */
+        .s3-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            padding: 2px 5px;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--accent-secondary);
+            border-radius: 3px;
+            text-decoration: none;
+            font-size: 9px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .s3-link:hover {
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--accent-secondary);
+            text-decoration: none;
+        }
+
+        .s3-link i {
+            font-size: 8px;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .loading p {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .loading i {
+            font-size: 40px;
+            margin-bottom: 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Diff indicators */
+        .diff-indicator {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 4px;
+        }
+
+        .diff-indicator.better {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .diff-indicator.worse {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .selection-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .viz-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            .selection-grid {
+                grid-template-columns: 1fr;
+            }
+            .header {
+                padding: 16px 20px;
+            }
+            .header-right {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-end;
+            }
+        }
+
+        /* ============================================
+           DARK MODE STYLES
+           ============================================ */
+        body.dark-mode {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2a2a2a;
+            --text-primary: #e4e4e7;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border-color: #3f3f46;
+            --accent-primary: #60a5fa;
+            --accent-secondary: #a78bfa;
+            --success: #4ade80;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.5);
+        }
+
+        body.dark-mode {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .header {
+            background: #0a0a0a;
+        }
+
+        body.dark-mode .selection-panel,
+        body.dark-mode .filters-panel,
+        body.dark-mode .viz-card,
+        body.dark-mode .stat-card,
+        body.dark-mode .table-section {
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode select,
+        body.dark-mode input {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        body.dark-mode select:hover,
+        body.dark-mode input:hover {
+            border-color: var(--accent-primary);
+        }
+
+        body.dark-mode .builds-chips {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode .add-build-btn {
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        body.dark-mode .add-build-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        body.dark-mode .filter-chip {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        body.dark-mode .filter-chip:hover {
+            border-color: var(--accent-primary);
+        }
+
+        body.dark-mode .filter-chip.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        body.dark-mode .filter-toggle {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        body.dark-mode .filter-toggle:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        body.dark-mode .comparison-table th {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode .comparison-table th.build-header {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+        }
+
+        body.dark-mode .comparison-table td {
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode .comparison-table tr:hover td {
+            background: var(--bg-tertiary);
+        }
+
+        body.dark-mode .build-cell {
+            background: var(--bg-secondary);
+        }
+
+        body.dark-mode .build-cell.empty {
+            background: repeating-linear-gradient(
+                45deg,
+                var(--bg-tertiary),
+                var(--bg-tertiary) 5px,
+                var(--bg-secondary) 5px,
+                var(--bg-secondary) 10px
+            );
+        }
+
+        body.dark-mode .build-cell .stat.pass {
+            color: var(--success);
+            background: rgba(74, 222, 128, 0.15);
+        }
+
+        body.dark-mode .build-cell .stat.fail {
+            color: var(--danger);
+            background: rgba(248, 113, 113, 0.15);
+        }
+
+        body.dark-mode .build-cell .stat.total {
+            color: var(--accent-primary);
+            background: rgba(96, 165, 250, 0.15);
+        }
+
+        body.dark-mode .s3-link {
+            background: rgba(167, 139, 250, 0.15);
+            color: var(--accent-secondary);
+        }
+
+        body.dark-mode .s3-link:hover {
+            background: rgba(167, 139, 250, 0.25);
+        }
+
+        body.dark-mode .diff-indicator.better {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--success);
+        }
+
+        body.dark-mode .diff-indicator.worse {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--danger);
+        }
+
+        body.dark-mode .table-header {
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode .search-input {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .build-dropdown {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        body.dark-mode .build-list-item {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .build-list-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        body.dark-mode .build-list-item.selected {
+            background: rgba(96, 165, 250, 0.15);
+            color: var(--accent-primary);
+        }
+
+        body.dark-mode .build-list-loading {
+            color: var(--text-secondary);
+        }
+
+        body.dark-mode .overlay {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        body.dark-mode .loading {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .loading p {
+            color: #d1d5db;
+        }
+
+        body.dark-mode .loading-spinner {
+            border-color: rgba(59, 130, 246, 0.3);
+            border-top-color: #60a5fa;
+        }
+
+        body.dark-mode .empty-state {
+            color: var(--text-secondary);
+        }
+
+        body.dark-mode .empty-state h3 {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .stat-card.success .stat-value {
+            color: var(--success);
+        }
+
+        body.dark-mode .job-name {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .job-meta {
+            color: #9ca3af;
+        }
+
+        /* Chart titles and viz card text */
+        body.dark-mode .viz-card h3 {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .viz-card h3 i {
+            color: var(--accent-primary);
+        }
+
+        /* Table header text */
+        body.dark-mode .table-header h3 {
+            color: var(--text-primary);
+        }
+
+        /* Platform and Feature column values - brighter */
+        body.dark-mode .comparison-table td .job-meta {
+            color: #d1d5db;
+        }
+
+        /* Meta row in build cells - time, runs, etc */
+        body.dark-mode .build-cell .meta-row {
+            color: #9ca3af;
+        }
+
+        body.dark-mode .build-cell .meta-row i {
+            color: #9ca3af;
+        }
+
+        /* Filter group titles */
+        body.dark-mode .filter-group h4 {
+            color: var(--text-primary);
+        }
+
+        body.dark-mode .filter-group h4 i {
+            color: var(--accent-primary);
+        }
+
+        /* Panel titles */
+        body.dark-mode .panel-title {
+            color: var(--text-primary);
+        }
+
+        /* Form labels */
+        body.dark-mode .form-group label {
+            color: #9ca3af;
+        }
+
+        /* Stat card labels */
+        body.dark-mode .stat-card .stat-label {
+            color: #9ca3af;
+        }
+
+        body.dark-mode .stat-card .stat-value {
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1><i class="fa fa-exchange"></i> Build Comparison</h1>
+                <div class="header-subtitle">Compare job performance across multiple builds</div>
+            </div>
+            <div class="header-right">
+                <div class="theme-toggle-wrapper">
+                    <span class="theme-toggle-text">Dark mode</span>
+                    <div class="theme-toggle-container" id="dark-mode-toggle" title="Toggle Dark Mode">
+                        <label class="theme-toggle-label" id="theme-toggle-label">
+                            <i class="fa fa-moon-o"></i>
+                            <i class="fa fa-sun-o"></i>
+                            <span class="theme-toggle-ball"></span>
+                        </label>
+                    </div>
+                </div>
+                <a href="/" class="back-link">
+                    <i class="fa fa-arrow-left"></i> Back to Greenboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Selection Panel -->
+        <div class="selection-panel">
+            <div class="panel-title"><i class="fa fa-cog"></i> Build Selection</div>
+            <div class="selection-grid">
+                <div class="form-group">
+                    <label>Target</label>
+                    <select id="target-select">
+                        <option value="server">Server</option>
+                        <option value="cblite">CBLite</option>
+                        <option value="sync_gateway">Sync Gateway</option>
+                        <option value="operator">Operator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Version</label>
+                    <select id="version-select">
+                        <option value="">Select version...</option>
+                    </select>
+                </div>
+                <div class="form-group builds-selector">
+                    <label>Builds to Compare (select 2 or more)</label>
+                    <div class="builds-chips" id="builds-chips">
+                        <button class="add-build-btn" id="add-build-btn">
+                            <i class="fa fa-plus"></i> Add Build
+                        </button>
+                    </div>
+                </div>
+                <button class="compare-btn" id="compare-btn" disabled>
+                    <i class="fa fa-bar-chart"></i> Compare
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters Panel -->
+        <div class="filters-panel" id="filters-panel">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <h4><i class="fa fa-server"></i> Platforms <span class="filter-toggle" id="platform-toggle" title="Toggle All"><i class="fa fa-check-square-o"></i></span></h4>
+                    <div class="filter-chips" id="platform-filters"></div>
+                </div>
+                <div class="filter-group">
+                    <h4><i class="fa fa-puzzle-piece"></i> Features <span class="filter-toggle" id="feature-toggle" title="Toggle All"><i class="fa fa-check-square-o"></i></span></h4>
+                    <div class="filter-chips" id="feature-filters"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section (hidden initially) -->
+        <div id="results-section" style="display: none;">
+            <!-- Summary Stats -->
+            <div class="summary-stats" id="summary-stats"></div>
+
+            <!-- Visualization -->
+            <div class="viz-section">
+                <div class="viz-card">
+                    <h3><i class="fa fa-bar-chart"></i> Pass/Fail Comparison</h3>
+                    <div class="chart-container">
+                        <canvas id="comparison-chart"></canvas>
+                    </div>
+                </div>
+                <div class="viz-card">
+                    <h3><i class="fa fa-pie-chart"></i> Pass Rate by Build</h3>
+                    <div class="chart-container">
+                        <canvas id="passrate-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="table-section">
+                <div class="table-header">
+                    <h3><i class="fa fa-table"></i> Job Comparison</h3>
+                    <div class="table-controls">
+                        <input type="text" class="search-input" id="job-search" placeholder="Search jobs...">
+                        <select id="filter-status">
+                            <option value="all">All Jobs</option>
+                            <option value="diff">Different Results Only</option>
+                            <option value="improved">Improved Only</option>
+                            <option value="regressed">Regressed Only</option>
+                            <option value="missing">Missing in Some Builds</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="comparison-table" id="comparison-table">
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state">
+            <i class="fa fa-exchange"></i>
+            <h3>Select Builds to Compare</h3>
+            <p>Choose a version and select at least 2 builds to start comparing</p>
+        </div>
+
+        <!-- Loading State -->
+        <div class="loading" id="loading-state" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading comparison data...</p>
+        </div>
+    </div>
+
+    <!-- Build Selection Modal -->
+    <div class="overlay" id="overlay"></div>
+    <div class="build-dropdown" id="build-dropdown">
+        <div class="build-dropdown-header">
+            <h3>Select a Build</h3>
+            <button class="build-dropdown-close" id="close-dropdown">&times;</button>
+        </div>
+        <div id="build-list-controls" style="display:flex; gap:10px; margin-bottom:12px;">
+            <input id="build-filter-input" type="text" placeholder="Filter builds (e.g. 7.6.1 or 1442)" style="flex:1; padding:10px 12px;">
+        </div>
+        <div id="all-versions-note" style="display:none; margin: 0 0 12px; color: var(--text-secondary); font-size: 13px;">
+            All versions selected — enter the full build (e.g. <span style="font-family: 'JetBrains Mono', monospace;">7.6.1-4321</span>).
+        </div>
+        <div id="build-manual-controls" style="display:flex; gap:10px; margin-bottom:12px;">
+            <input id="build-manual-input" type="text" placeholder="Add build manually (e.g. 7.6.1-4321)" style="flex:1; padding:10px 12px; font-family: 'JetBrains Mono', monospace;">
+            <button class="compare-btn" id="build-manual-add" style="padding:10px 14px; border-radius:10px; font-size:13px;">
+                <i class="fa fa-plus"></i> Add
+            </button>
+        </div>
+        <div class="build-list-loading" id="build-list-loading">
+            <i class="fa fa-spinner fa-spin"></i>
+            <span>Loading builds...</span>
+        </div>
+        <div class="build-list" id="build-list"></div>
+    </div>
+
+    <script>
+        // State
+        let state = {
+            target: 'server',
+            version: '',
+            selectedBuilds: [],
+            availableBuilds: [],
+            comparisonData: null,
+            activePlatforms: [],
+            activeFeatures: []
+        };
+
+        let comparisonChart = null;
+        let passrateChart = null;
+
+        // DOM Elements
+        const targetSelect = document.getElementById('target-select');
+        const versionSelect = document.getElementById('version-select');
+        const buildsChips = document.getElementById('builds-chips');
+        const addBuildBtn = document.getElementById('add-build-btn');
+        const compareBtn = document.getElementById('compare-btn');
+        const buildDropdown = document.getElementById('build-dropdown');
+        const buildList = document.getElementById('build-list');
+        const overlay = document.getElementById('overlay');
+        const closeDropdown = document.getElementById('close-dropdown');
+        const buildListControls = document.getElementById('build-list-controls');
+        const buildFilterInput = document.getElementById('build-filter-input');
+        const allVersionsNote = document.getElementById('all-versions-note');
+        const buildManualControls = document.getElementById('build-manual-controls');
+        const buildManualInput = document.getElementById('build-manual-input');
+        const buildManualAddBtn = document.getElementById('build-manual-add');
+        const resultsSection = document.getElementById('results-section');
+        const emptyState = document.getElementById('empty-state');
+        const loadingState = document.getElementById('loading-state');
+        const filtersPanel = document.getElementById('filters-panel');
+        const platformFilters = document.getElementById('platform-filters');
+        const featureFilters = document.getElementById('feature-filters');
+        const jobSearch = document.getElementById('job-search');
+        const filterStatus = document.getElementById('filter-status');
+        const buildListLoading = document.getElementById('build-list-loading');
+
+        // Load versions
+        async function loadVersions() {
+            try {
+                const response = await fetch(`/versions/${state.target}`);
+                const versions = await response.json();
+                // Sort versions in descending order
+                versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+                versionSelect.innerHTML =
+                    '<option value="">Select version...</option>' +
+                    '<option value="all">All versions</option>' +
+                    versions.map(v => `<option value="${v}">${v}</option>`).join('');
+            } catch (err) {
+                console.error('Failed to load versions:', err);
+            }
+        }
+
+        // Load builds for version
+        async function loadBuilds() {
+            if (!state.version) return;
+            // In "All versions" mode, don't fetch the build list (manual entry only)
+            if (state.version === 'all') {
+                state.availableBuilds = [];
+                return;
+            }
+            
+            // Show loading, hide list
+            buildListLoading.style.display = 'flex';
+            buildList.style.display = 'none';
+            
+            try {
+                // Keep this fast (the old behavior) for normal version selection
+                const response = await fetch(`/compare/builds/${state.target}/${state.version}?limit=200`);
+                state.availableBuilds = await response.json();
+                renderBuildList();
+            } catch (err) {
+                console.error('Failed to load builds:', err);
+                buildList.innerHTML = '<div class="build-list-empty">Failed to load builds</div>';
+            } finally {
+                // Hide loading, show list
+                buildListLoading.style.display = 'none';
+                buildList.style.display = 'block';
+            }
+        }
+
+        function updateBuildPickerMode() {
+            const isAllVersions = state.version === 'all';
+            // Version selected => list-only (clean). All versions => manual-only.
+            if (buildListControls) buildListControls.style.display = 'none'; // always hidden (clean UI)
+            if (allVersionsNote) allVersionsNote.style.display = isAllVersions ? 'block' : 'none';
+            if (buildManualControls) buildManualControls.style.display = isAllVersions ? 'flex' : 'none';
+
+            if (isAllVersions) {
+                // Hide list/loading entirely in all-versions mode (manual entry only)
+                buildListLoading.style.display = 'none';
+                buildList.style.display = 'none';
+                buildList.innerHTML = '';
+            } else {
+                // Show list/loading in normal version mode
+                buildList.style.display = 'block';
+            }
+        }
+
+        // Render build selection list
+        function renderBuildList() {
+            const q = (buildFilterInput && buildFilterInput.value ? buildFilterInput.value : '').trim().toLowerCase();
+            const filteredBuilds = q
+                ? state.availableBuilds.filter(b => String(b.build).toLowerCase().includes(q))
+                : state.availableBuilds;
+
+            buildList.innerHTML = filteredBuilds.map(build => `
+                <div class="build-list-item ${state.selectedBuilds.includes(build.build) ? 'selected' : ''}" 
+                     data-build="${build.build}">
+                    <span>${build.build}</span>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            buildList.querySelectorAll('.build-list-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const build = item.dataset.build;
+                    if (!state.selectedBuilds.includes(build)) {
+                        state.selectedBuilds.push(build);
+                        // Sort selected builds in ascending order (lower build on left, higher on right)
+                        state.selectedBuilds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                        renderSelectedBuilds();
+                        updateCompareButton();
+                    }
+                    closeModal();
+                });
+            });
+        }
+
+        // Render selected builds chips
+        function renderSelectedBuilds() {
+            const chipsHtml = state.selectedBuilds.map(build => `
+                <span class="build-chip">
+                    ${build}
+                    <span class="remove" data-build="${build}">&times;</span>
+                </span>
+            `).join('');
+
+            buildsChips.innerHTML = chipsHtml + `
+                <button class="add-build-btn" id="add-build-btn">
+                    <i class="fa fa-plus"></i> Add Build
+                </button>
+            `;
+
+            // Re-attach event listeners
+            document.getElementById('add-build-btn').addEventListener('click', openModal);
+            buildsChips.querySelectorAll('.remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const build = e.target.dataset.build;
+                    state.selectedBuilds = state.selectedBuilds.filter(b => b !== build);
+                    renderSelectedBuilds();
+                    updateCompareButton();
+                });
+            });
+        }
+
+        // Update compare button state
+        function updateCompareButton() {
+            compareBtn.disabled = state.selectedBuilds.length < 2;
+        }
+
+        // Modal controls
+        function openModal() {
+            if (!state.version) {
+                alert('Please select a version first');
+                return;
+            }
+            buildDropdown.classList.add('active');
+            overlay.classList.add('active');
+
+            updateBuildPickerMode();
+
+            // All versions = manual entry only
+            if (state.version === 'all') {
+                return;
+            }
+            
+            // If builds are already loaded, show them; otherwise show loading
+            if (state.availableBuilds.length > 0) {
+                buildListLoading.style.display = 'none';
+                buildList.style.display = 'block';
+                renderBuildList();
+            } else {
+                buildListLoading.style.display = 'flex';
+                buildList.style.display = 'none';
+                loadBuilds();
+            }
+        }
+
+        function closeModal() {
+            buildDropdown.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        function addBuildToSelection(build) {
+            const b = String(build || '').trim();
+            if (!b) return;
+            if (!state.selectedBuilds.includes(b)) {
+                state.selectedBuilds.push(b);
+                // Sort selected builds in ascending order (lower build on left, higher on right)
+                state.selectedBuilds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                renderSelectedBuilds();
+                updateCompareButton();
+            }
+        }
+
+        // Perform comparison
+        async function performComparison() {
+            if (state.selectedBuilds.length < 2) return;
+
+            // Sort selected builds in ascending order before comparison (lower build on left, higher on right)
+            state.selectedBuilds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+            emptyState.style.display = 'none';
+            resultsSection.style.display = 'none';
+            loadingState.style.display = 'flex';
+
+            try {
+                const builds = state.selectedBuilds.join(',');
+                const response = await fetch(`/compare/jobs/${state.target}?builds=${builds}`);
+                state.comparisonData = await response.json();
+                
+                // Ensure builds in comparison data are in ascending order (lower build on left, higher on right)
+                state.comparisonData.builds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+                // Initialize filters
+                state.activePlatforms = [...state.comparisonData.platforms];
+                state.activeFeatures = [...state.comparisonData.features];
+
+                renderFilters();
+                renderResults();
+
+                loadingState.style.display = 'none';
+                filtersPanel.classList.add('active');
+                resultsSection.style.display = 'block';
+            } catch (err) {
+                console.error('Comparison failed:', err);
+                loadingState.style.display = 'none';
+                emptyState.style.display = 'block';
+            }
+        }
+
+        // Render filters (initial render only)
+        function renderFilters() {
+            // Render platform chips
+            platformFilters.innerHTML = state.comparisonData.platforms.map(p => `
+                <span class="filter-chip ${state.activePlatforms.includes(p) ? 'active' : ''}" 
+                      data-type="platform" data-value="${p}">${p}</span>
+            `).join('');
+
+            // Render feature chips
+            featureFilters.innerHTML = state.comparisonData.features.map(f => `
+                <span class="filter-chip ${state.activeFeatures.includes(f) ? 'active' : ''}" 
+                      data-type="feature" data-value="${f}">${f}</span>
+            `).join('');
+            
+            // Update toggle icons
+            updateToggleIcon('platform');
+            updateToggleIcon('feature');
+
+            // Add click handlers for filter chips
+            // If all are selected, click = select only this one
+            // Otherwise, click = toggle (add/remove from selection)
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const type = chip.dataset.type;
+                    const value = chip.dataset.value;
+
+                    if (type === 'platform') {
+                        const allPlatforms = state.comparisonData.platforms;
+                        const allSelected = state.activePlatforms.length === allPlatforms.length;
+                        
+                        if (allSelected) {
+                            state.activePlatforms = [value];
+                            platformFilters.querySelectorAll('.filter-chip').forEach(c => {
+                                c.classList.toggle('active', c.dataset.value === value);
+                            });
+                        } else {
+                            if (state.activePlatforms.includes(value)) {
+                                if (state.activePlatforms.length > 1) {
+                                    state.activePlatforms = state.activePlatforms.filter(p => p !== value);
+                                    chip.classList.remove('active');
+                                }
+                            } else {
+                                state.activePlatforms.push(value);
+                                chip.classList.add('active');
+                            }
+                        }
+                        updateToggleIcon('platform');
+                    } else {
+                        const allFeatures = state.comparisonData.features;
+                        const allSelected = state.activeFeatures.length === allFeatures.length;
+                        
+                        if (allSelected) {
+                            state.activeFeatures = [value];
+                            featureFilters.querySelectorAll('.filter-chip').forEach(c => {
+                                c.classList.toggle('active', c.dataset.value === value);
+                            });
+                        } else {
+                            if (state.activeFeatures.includes(value)) {
+                                if (state.activeFeatures.length > 1) {
+                                    state.activeFeatures = state.activeFeatures.filter(f => f !== value);
+                                    chip.classList.remove('active');
+                                }
+                            } else {
+                                state.activeFeatures.push(value);
+                                chip.classList.add('active');
+                            }
+                        }
+                        updateToggleIcon('feature');
+                    }
+
+                    // Defer data update to allow UI to update first
+                    requestAnimationFrame(() => updateResultsOptimized());
+                });
+            });
+            
+            // Add click handlers for toggle buttons (select all / deselect all)
+            document.getElementById('platform-toggle')?.addEventListener('click', () => {
+                const allSelected = state.activePlatforms.length === state.comparisonData.platforms.length;
+                if (allSelected) {
+                    state.activePlatforms = [state.comparisonData.platforms[0]];
+                } else {
+                    state.activePlatforms = [...state.comparisonData.platforms];
+                }
+                platformFilters.querySelectorAll('.filter-chip').forEach(c => {
+                    c.classList.toggle('active', state.activePlatforms.includes(c.dataset.value));
+                });
+                updateToggleIcon('platform');
+                requestAnimationFrame(() => updateResultsOptimized());
+            });
+            document.getElementById('feature-toggle')?.addEventListener('click', () => {
+                const allSelected = state.activeFeatures.length === state.comparisonData.features.length;
+                if (allSelected) {
+                    state.activeFeatures = [state.comparisonData.features[0]];
+                } else {
+                    state.activeFeatures = [...state.comparisonData.features];
+                }
+                featureFilters.querySelectorAll('.filter-chip').forEach(c => {
+                    c.classList.toggle('active', state.activeFeatures.includes(c.dataset.value));
+                });
+                updateToggleIcon('feature');
+                requestAnimationFrame(() => updateResultsOptimized());
+            });
+        }
+        
+        // Update toggle icon state
+        function updateToggleIcon(type) {
+            if (type === 'platform') {
+                const allSelected = state.activePlatforms.length === state.comparisonData.platforms.length;
+                const toggle = document.getElementById('platform-toggle');
+                if (toggle) {
+                    toggle.innerHTML = allSelected ? '<i class="fa fa-check-square-o"></i>' : '<i class="fa fa-square-o"></i>';
+                    toggle.title = allSelected ? 'Deselect All' : 'Select All';
+                }
+            } else {
+                const allSelected = state.activeFeatures.length === state.comparisonData.features.length;
+                const toggle = document.getElementById('feature-toggle');
+                if (toggle) {
+                    toggle.innerHTML = allSelected ? '<i class="fa fa-check-square-o"></i>' : '<i class="fa fa-square-o"></i>';
+                    toggle.title = allSelected ? 'Deselect All' : 'Select All';
+                }
+            }
+        }
+        
+        // Optimized results update - updates charts in place instead of recreating
+        function updateResultsOptimized() {
+            const data = state.comparisonData;
+            const builds = data.builds;
+
+            // Filter jobs
+            let jobs = data.jobs.filter(job => 
+                state.activePlatforms.includes(job.os) && 
+                state.activeFeatures.includes(job.component)
+            );
+
+            // Apply search filter
+            const searchTerm = jobSearch.value.toLowerCase();
+            if (searchTerm) {
+                jobs = jobs.filter(job => 
+                    job.name.toLowerCase().includes(searchTerm) ||
+                    job.component.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            // Apply status filter
+            const statusFilter = filterStatus.value;
+            if (statusFilter !== 'all') {
+                jobs = jobs.filter(job => {
+                    const buildResults = builds.map(b => job.builds[b]?.result || 'MISSING');
+                    const hasData = builds.map(b => !!job.builds[b]);
+                    
+                    if (statusFilter === 'diff') {
+                        const results = buildResults.filter(r => r !== 'MISSING');
+                        return new Set(results).size > 1;
+                    }
+                    if (statusFilter === 'missing') {
+                        return hasData.includes(false);
+                    }
+                    if (statusFilter === 'improved' || statusFilter === 'regressed') {
+                        // Compare first and last build.
+                        // Treat "Not Run → Ran" as improved, and "Ran → Not Run" as regressed.
+                        const first = job.builds[builds[0]] || null;
+                        const last = job.builds[builds[builds.length - 1]] || null;
+
+                        const firstDenom = first ? (first.passed + first.failed) : 0;
+                        const lastDenom = last ? (last.passed + last.failed) : 0;
+
+                        const firstRan = firstDenom > 0;
+                        const lastRan = lastDenom > 0;
+
+                        if (!firstRan && lastRan) return statusFilter === 'improved';
+                        if (firstRan && !lastRan) return statusFilter === 'regressed';
+                        if (!firstRan && !lastRan) return false;
+
+                        const firstPass = first.passed / firstDenom;
+                        const lastPass = last.passed / lastDenom;
+                        return statusFilter === 'improved' ? lastPass > firstPass : lastPass < firstPass;
+                    }
+                    return true;
+                });
+            }
+
+            // Update summary stats
+            renderSummaryStats(jobs, builds);
+
+            // Update charts in place (much faster than recreating)
+            updateChartsData(jobs, builds);
+
+            // Update table
+            renderTable(jobs, builds);
+        }
+        
+        // Update chart data without recreating
+        function updateChartsData(jobs, builds) {
+            const stats = builds.map(build => {
+                let passed = 0, failed = 0;
+                jobs.forEach(job => {
+                    if (job.builds[build]) {
+                        passed += job.builds[build].passed || 0;
+                        failed += job.builds[build].failed || 0;
+                    }
+                });
+                return { build, passed, failed };
+            });
+
+            if (comparisonChart) {
+                comparisonChart.data.datasets[0].data = stats.map(s => s.passed);
+                comparisonChart.data.datasets[1].data = stats.map(s => s.failed);
+                comparisonChart.update('none'); // 'none' disables animations for instant update
+            }
+
+            if (passrateChart) {
+                passrateChart.data.datasets[0].data = stats.map(s => 
+                    s.passed + s.failed > 0 ? ((s.passed / (s.passed + s.failed)) * 100).toFixed(1) : 0
+                );
+                passrateChart.update('none');
+            }
+        }
+
+        // Render results
+        function renderResults() {
+            const data = state.comparisonData;
+            const builds = data.builds;
+
+            // Filter jobs
+            let jobs = data.jobs.filter(job => 
+                state.activePlatforms.includes(job.os) && 
+                state.activeFeatures.includes(job.component)
+            );
+
+            // Apply search filter
+            const searchTerm = jobSearch.value.toLowerCase();
+            if (searchTerm) {
+                jobs = jobs.filter(job => 
+                    job.name.toLowerCase().includes(searchTerm) ||
+                    job.component.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            // Apply status filter
+            const statusFilter = filterStatus.value;
+            if (statusFilter !== 'all') {
+                jobs = jobs.filter(job => {
+                    const buildResults = builds.map(b => job.builds[b]?.result || 'MISSING');
+                    const hasData = builds.map(b => !!job.builds[b]);
+                    
+                    if (statusFilter === 'diff') {
+                        const results = buildResults.filter(r => r !== 'MISSING');
+                        return new Set(results).size > 1;
+                    }
+                    if (statusFilter === 'missing') {
+                        return hasData.includes(false);
+                    }
+                    if (statusFilter === 'improved' || statusFilter === 'regressed') {
+                        // Compare first and last build.
+                        // Treat "Not Run → Ran" as improved, and "Ran → Not Run" as regressed.
+                        const first = job.builds[builds[0]] || null;
+                        const last = job.builds[builds[builds.length - 1]] || null;
+
+                        const firstDenom = first ? (first.passed + first.failed) : 0;
+                        const lastDenom = last ? (last.passed + last.failed) : 0;
+
+                        const firstRan = firstDenom > 0;
+                        const lastRan = lastDenom > 0;
+
+                        if (!firstRan && lastRan) return statusFilter === 'improved';
+                        if (firstRan && !lastRan) return statusFilter === 'regressed';
+                        if (!firstRan && !lastRan) return false;
+
+                        // Pass rate = passed / (passed + failed), matches Greenboard
+                        const firstPass = first.passed / firstDenom;
+                        const lastPass = last.passed / lastDenom;
+                        return statusFilter === 'improved' ? lastPass > firstPass : lastPass < firstPass;
+                    }
+                    return true;
+                });
+            }
+
+            // Calculate summary stats
+            renderSummaryStats(jobs, builds);
+
+            // Render charts
+            renderCharts(jobs, builds);
+
+            // Render table
+            renderTable(jobs, builds);
+        }
+
+        // Render summary statistics
+        function renderSummaryStats(jobs, builds) {
+            const stats = builds.map(build => {
+                let passed = 0, failed = 0, total = 0, jobsRan = 0;
+                jobs.forEach(job => {
+                    if (job.builds[build]) {
+                        passed += job.builds[build].passed || 0;
+                        failed += job.builds[build].failed || 0;
+                        total += job.builds[build].total || 0;
+                        const denom = (job.builds[build].passed || 0) + (job.builds[build].failed || 0);
+                        if (denom > 0) jobsRan += 1;
+                    }
+                });
+                return { build, passed, failed, total, jobsRan };
+            });
+
+            // Calculate pass rates for all builds
+            const statsWithRates = stats.map(s => {
+                const denom = s.passed + s.failed;
+                const passRate = denom > 0 ? ((s.passed / denom) * 100).toFixed(1) : 0;
+                return { ...s, passRate: parseFloat(passRate) };
+            });
+            
+            // Find the highest pass rate
+            const maxPassRate = Math.max(...statsWithRates.map(s => s.passRate));
+
+            const summaryStats = document.getElementById('summary-stats');
+            summaryStats.innerHTML = `
+                <div class="summary-row summary-row-single">
+                    <div class="stat-card">
+                        <div class="stat-value">${jobs.length}</div>
+                        <div class="stat-label">Total Jobs Compared</div>
+                    </div>
+                </div>
+                <div class="summary-row">
+                    ${statsWithRates.map(s => {
+                        // Highlight the build with highest pass rate in green
+                        const isHighest = s.passRate === maxPassRate;
+                        return `
+                        <div class="stat-card ${isHighest ? 'success' : ''}">
+                            <div class="stat-value">${s.passRate.toFixed(1)}% <span style="font-size: 16px; font-weight: 600; opacity: 0.9;">(${s.jobsRan})</span></div>
+                            <div class="stat-label">${s.build}</div>
+                        </div>
+                    `}).join('')}
+                </div>
+            `;
+        }
+
+        // Render charts
+        function renderCharts(jobs, builds) {
+            const stats = builds.map(build => {
+                let passed = 0, failed = 0;
+                jobs.forEach(job => {
+                    if (job.builds[build]) {
+                        passed += job.builds[build].passed || 0;
+                        failed += job.builds[build].failed || 0;
+                    }
+                });
+                return { build, passed, failed };
+            });
+
+            // Destroy existing charts
+            if (comparisonChart) comparisonChart.destroy();
+            if (passrateChart) passrateChart.destroy();
+
+            // Check dark mode for chart colors
+            const isDark = document.body.classList.contains('dark-mode');
+            const textColor = isDark ? '#e5e7eb' : '#374151';
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+            // Bar chart - Pass/Fail comparison
+            const ctx1 = document.getElementById('comparison-chart').getContext('2d');
+            comparisonChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: builds,
+                    datasets: [
+                        {
+                            label: 'Passed',
+                            data: stats.map(s => s.passed),
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Failed',
+                            data: stats.map(s => s.failed),
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: textColor
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: { color: textColor },
+                            grid: { color: gridColor }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { color: textColor },
+                            grid: { color: gridColor }
+                        }
+                    }
+                }
+            });
+
+            // Line chart - Pass rate trend
+            const ctx2 = document.getElementById('passrate-chart').getContext('2d');
+            passrateChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: builds,
+                    datasets: [{
+                        label: 'Pass Rate %',
+                        data: stats.map(s => s.passed + s.failed > 0 ? ((s.passed / (s.passed + s.failed)) * 100).toFixed(1) : 0),
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 6,
+                        pointBackgroundColor: 'rgba(59, 130, 246, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: textColor },
+                            grid: { color: gridColor }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: textColor,
+                                callback: value => value + '%'
+                            },
+                            grid: { color: gridColor }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render comparison table
+        function renderTable(jobs, builds) {
+            const tableHead = document.getElementById('table-head');
+            const tableBody = document.getElementById('table-body');
+
+            // Header
+            tableHead.innerHTML = `
+                <tr>
+                    <th style="min-width: 200px; max-width: 300px;">Job Name</th>
+                    <th>Platform</th>
+                    <th>Feature</th>
+                    ${builds.map(b => `
+                        <th class="build-header">
+                            <div class="build-name">${b}</div>
+                        </th>
+                    `).join('')}
+                </tr>
+            `;
+
+            // Body
+            tableBody.innerHTML = jobs.map(job => {
+                const firstBuild = job.builds[builds[0]];
+                const lastBuild = job.builds[builds[builds.length - 1]];
+
+                return `
+                    <tr>
+                        <td>
+                            <div class="job-name">${job.name}</div>
+                        </td>
+                        <td><span class="job-meta">${job.os}</span></td>
+                        <td><span class="job-meta">${job.component}</span></td>
+                        ${builds.map((build, idx) => {
+                            const data = job.builds[build];
+                            if (!data) {
+                                return `<td class="build-cell empty">Not Run</td>`;
+                            }
+
+                            // Calculate diff indicator (pass rate = passed / (passed + failed), matches Greenboard)
+                            let diffHtml = '';
+                            if (idx > 0 && data) {
+                                const base = firstBuild || null;
+                                const prevDenom = base ? (base.passed + base.failed) : 0;
+                                const currDenom = data.passed + data.failed;
+
+                                // Special-case run/no-run transitions for clarity
+                                let diffNum = null;
+                                if (prevDenom === 0 && currDenom > 0) {
+                                    diffNum = 100.0;
+                                } else if (prevDenom > 0 && currDenom === 0) {
+                                    diffNum = -100.0;
+                                } else {
+                                    const prevRate = prevDenom > 0 ? (base.passed / prevDenom) : 0;
+                                    const currRate = currDenom > 0 ? (data.passed / currDenom) : 0;
+                                    diffNum = (currRate - prevRate) * 100;
+                                }
+
+                                // Avoid noisy +/-0.0%
+                                if (Math.abs(diffNum) > 0.05) {
+                                    const diff = diffNum.toFixed(1);
+                                    if (diffNum > 0) {
+                                        diffHtml = `<span class="diff-indicator better">+${diff}%</span>`;
+                                    } else if (diffNum < 0) {
+                                        diffHtml = `<span class="diff-indicator worse">${diff}%</span>`;
+                                    }
+                                }
+                            }
+
+                            const duration = data.duration ? formatDuration(data.duration) : '-';
+                            const resultClass = data.result === 'SUCCESS' ? 'success' : 
+                                               data.result === 'FAILURE' ? 'failure' : 'pending';
+
+                            // Generate S3 link
+                            const s3Link = getS3Link(data.url, data.build_id, build);
+                            const s3LinkHtml = s3Link 
+                                ? `<a href="${s3Link}" target="_blank" class="s3-link"><i class="fa fa-external-link"></i> S3</a>`
+                                : '';
+
+                            return `
+                                <td class="build-cell">
+                                    <div class="stats-grid">
+                                        <span class="stat pass">${data.passed}</span>
+                                        <span class="stat fail">${data.failed}</span>
+                                        <span class="stat total">${data.total}</span>
+                                    </div>
+                                    <div class="meta-row">
+                                        <span><i class="fa fa-clock-o"></i> ${duration}</span>
+                                        <span><i class="fa fa-refresh"></i> ${data.runs}</span>
+                                        ${s3LinkHtml}
+                                        ${diffHtml}
+                                    </div>
+                                </td>
+                            `;
+                        }).join('')}
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Helper function
+        function formatDuration(ms) {
+            if (!ms) return '-';
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            if (hours > 0) return `${hours}h ${minutes % 60}m`;
+            if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+            return `${seconds}s`;
+        }
+
+        // Generate S3 link from job URL and build version
+        function getS3Link(url, buildId, buildVersion) {
+            if (!url || !buildVersion) return null;
+            
+            try {
+                // Construct full job URL: url + build_id
+                const bid = (buildId !== undefined && buildId !== null && buildId !== '') 
+                            ? String(buildId) : '';
+                let fullUrl = String(url) + bid;
+                
+                // Remove trailing slash and split by '/'
+                fullUrl = fullUrl.replace(/\/$/, '');
+                const urlParts = fullUrl.split('/');
+                
+                // URL format: http://qa.sc.couchbase.com/job/test_suite_executor-TAF/12452
+                const buildNo = urlParts[urlParts.length - 1];
+                const jobName = urlParts[urlParts.length - 2];
+                
+                // buildNo should be a valid number
+                if (!buildNo || !jobName || !/^\d+$/.test(buildNo)) {
+                    return null;
+                }
+                
+                // Build the S3 link
+                return `http://cb-logs-qe.s3-website-us-west-2.amazonaws.com/${buildVersion}/jenkins_logs/${jobName}/${buildNo}`;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Event Listeners
+        targetSelect.addEventListener('change', (e) => {
+            state.target = e.target.value;
+            state.version = '';
+            state.selectedBuilds = [];
+            state.availableBuilds = [];
+            versionSelect.value = '';
+            renderSelectedBuilds();
+            updateCompareButton();
+            loadVersions();
+        });
+
+        versionSelect.addEventListener('change', (e) => {
+            state.version = e.target.value;
+            state.selectedBuilds = [];
+            state.availableBuilds = []; // Reset builds so they're reloaded
+            renderSelectedBuilds();
+            updateCompareButton();
+            if (state.version) {
+                updateBuildPickerMode();
+                if (state.version !== 'all') {
+                    loadBuilds(); // Pre-fetch builds when version is selected
+                }
+            }
+        });
+
+        addBuildBtn.addEventListener('click', openModal);
+        overlay.addEventListener('click', closeModal);
+        closeDropdown.addEventListener('click', closeModal);
+        compareBtn.addEventListener('click', performComparison);
+        buildFilterInput?.addEventListener('input', () => {
+            // Just re-render list; no refetch needed
+            if (state.availableBuilds && state.availableBuilds.length) renderBuildList();
+        });
+        buildManualAddBtn?.addEventListener('click', () => {
+            addBuildToSelection(buildManualInput.value);
+            buildManualInput.value = '';
+            closeModal();
+        });
+        buildManualInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addBuildToSelection(buildManualInput.value);
+                buildManualInput.value = '';
+                closeModal();
+            }
+        });
+
+        // Debounced search
+        let searchTimeout;
+        jobSearch.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (state.comparisonData) updateResultsOptimized();
+            }, 150);
+        });
+
+        filterStatus.addEventListener('change', () => {
+            if (state.comparisonData) requestAnimationFrame(() => updateResultsOptimized());
+        });
+
+        // Initialize
+        loadVersions();
+
+        // Dark Mode Toggle
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        const themeToggleLabel = document.getElementById('theme-toggle-label');
+        
+        // Load saved preference (use same key as Greenboard for consistency)
+        let isDarkMode = localStorage.getItem('greenboardDarkMode') === 'true';
+        
+        function applyDarkMode() {
+            if (isDarkMode) {
+                document.body.classList.add('dark-mode');
+                themeToggleLabel.classList.add('dark-active');
+            } else {
+                document.body.classList.remove('dark-mode');
+                themeToggleLabel.classList.remove('dark-active');
+            }
+        }
+        
+        // Apply initial state
+        applyDarkMode();
+        
+        // Toggle on click
+        darkModeToggle.addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            localStorage.setItem('greenboardDarkMode', isDarkMode);
+            applyDarkMode();
+            // Re-render charts with new colors if comparison data exists
+            if (state.comparisonData) {
+                renderCharts();
+            }
+        });
+    </script>
+</body>
+</html>
+

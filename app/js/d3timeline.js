@@ -431,10 +431,13 @@
                     setHighlightedBuild(xLabels)
 
 
-                    // Remove old elements
+                    // Remove old elements - ensure complete cleanup
                     svg.selectAll(".layer").remove()
                     svg.selectAll(".hover-line").remove()
                     svg.selectAll(".hover-circles").remove()
+                    svg.selectAll(".bar-segment").remove()
+                    svg.selectAll("rect").remove()
+                    svg.selectAll("g.layer").remove()
 
                     layer = appendLayersToSvg(svg, layers)
                     rect = appendRectToLayers(xScale, layer)
@@ -465,6 +468,9 @@
 
                 init:  function(builds, id, clickCallBack){
 
+                    // Clear any existing SVG to prevent duplicates
+                    d3.select(id).selectAll("svg").remove();
+                    
                     // init timeline svg
                     svg = appendSvgToDom(id)
 
@@ -478,6 +484,18 @@
                   
                   },
                 update: function(builds){
+                    // Cancel any pending updates to prevent duplicate renders
+                    if (this._updateTimeout) {
+                      $timeout.cancel(this._updateTimeout);
+                    }
+
+                    // Immediately remove all chart elements to prevent duplicates
+                    svg.selectAll(".layer").remove()
+                    svg.selectAll(".hover-line").remove()
+                    svg.selectAll(".hover-circles").remove()
+                    svg.select(".x").remove()
+                    svg.select(".y").remove()
+                    svg.select(".grid").remove()
 
                     // fade timeline
                     if (rect) {
@@ -494,14 +512,24 @@
                       .style("fill", "white")
 
                     // after fading out view...
-                    $timeout(function(){
-                        // remove x axis from dom
+                    var self = this;
+                    this._updateTimeout = $timeout(function(){
+                        // Ensure all elements are removed before re-rendering
+                        svg.selectAll(".layer").remove()
+                        svg.selectAll(".hover-line").remove()
+                        svg.selectAll(".hover-circles").remove()
                         svg.select(".x").remove()
                         svg.select(".y").remove()
-                        // remove bars from dom
-                        if (layer) layer.remove()
+                        svg.select(".grid").remove()
+                        
+                        // Reset rect and layer references
+                        rect = null;
+                        layer = null;
+                        
                         // re-render timeline
                         _render(builds)
+                        
+                        self._updateTimeout = null;
                     }, 250)
 
                   }

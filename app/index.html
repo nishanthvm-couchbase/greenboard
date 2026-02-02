@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <!-- Custom styles for this template -->
-    <link href="css/app.css" rel="stylesheet">
+    <link href="css/app.css?v=20260124b" rel="stylesheet">
 
   </head>
 
@@ -50,6 +50,115 @@
   <!-- TODO: some kind of spinner while resolving builds -->
   <div ui-view></div>
   
+  <!-- Views Modals -->
+  <!-- Save View Modal -->
+  <div class="modal fade" id="saveViewModal" tabindex="-1" role="dialog" aria-labelledby="saveViewModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="saveViewModalTitle">Save Current View</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="viewNameInput">View Name:</label>
+            <input type="text" class="form-control" id="viewNameInput" ng-model="$root.newViewName" placeholder="Enter view name" ng-keypress="$event.keyCode === 13 && viewsCtrl.saveCurrentView()">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" ng-click="viewsCtrl.saveCurrentView()">Save View</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Share View Modal -->
+  <div class="modal fade" id="shareViewModal" tabindex="-1" role="dialog" aria-labelledby="shareViewModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="shareViewModalTitle">Share View</h4>
+        </div>
+        <div class="modal-body">
+          <p>Select a view to share:</p>
+          <div class="form-group" ng-if="shareViewList && shareViewList.length > 0">
+            <select class="form-control" ng-model="$root.selectedShareView" ng-change="viewsCtrl.selectViewToShare($root.selectedShareView)">
+              <option value="">-- Select a view --</option>
+              <option ng-repeat="view in $root.shareViewList" value="{{view.id}}">{{view.name}}</option>
+            </select>
+          </div>
+          <div ng-if="!$root.shareViewList || $root.shareViewList.length === 0" class="alert alert-info">
+            No views available to share. Save a view first.
+          </div>
+          <div ng-if="$root.selectedShareView && $root.shareCode">
+            <div class="form-group">
+              <label>Share Code:</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="shareCodeInput" ng-value="$root.shareCode" readonly>
+                <span class="input-group-btn">
+                  <button class="btn btn-default" type="button" ng-click="viewsCtrl.copyShareCode()">
+                    <i class="fa fa-copy"></i> Copy
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Share URL:</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="shareUrlInput" ng-value="$root.shareUrl" readonly>
+                <span class="input-group-btn">
+                  <button class="btn btn-default" type="button" ng-click="viewsCtrl.copyShareUrl()">
+                    <i class="fa fa-copy"></i> Copy
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Import View Modal -->
+  <div class="modal fade" id="importViewModal" tabindex="-1" role="dialog" aria-labelledby="importViewModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+          <h4 class="modal-title" id="importViewModalTitle">Import View</h4>
+        </div>
+        <div class="modal-body">
+          <p>Paste a view code or URL to import:</p>
+          <div class="form-group">
+            <label for="importCodeInput">View Code or URL:</label>
+            <input type="text" class="form-control" id="importCodeInput" ng-model="$root.importCode" placeholder="Paste view code or URL here" ng-keypress="$event.keyCode === 13 && viewsCtrl.importView()">
+            <small class="help-block">You can paste either the share code or the full share URL</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" ng-click="viewsCtrl.importView()">Import View</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Toast Notification -->
+  <div class="toast-notification" ng-class="{'show': toast && toast.show, 'error': toast && toast.isError}" ng-if="toast">
+    <span>{{toast.message}}</span>
+  </div>
+  
   <!-- Bootstrap core JavaScript
   ================================================== -->
   <!-- Placed at the end of the document so the pages load faster -->
@@ -74,7 +183,7 @@
 
 
    <!-- user scripts -->
-   <script src="dist/greenboard.min.js"></script>
+   <script src="dist/greenboard.min.js?v=20260124u"></script>
 
   <!-- For debugging, comment above and uncomment below -->
   <!-- <script src="dist/greenboard.js"></script> -->

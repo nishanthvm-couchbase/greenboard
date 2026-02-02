@@ -94,7 +94,8 @@ var app = angular.module('greenBoard', [
     'app.infobar',
     'app.compare',
     'app.darkmode',
-    'app.aireport'
+    'app.aireport',
+    'app.views'
 ]);
 
 app.run(['$location', '$rootScope', 'Data', function($location, $rootScope, Data){
@@ -1449,10 +1450,13 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                     setHighlightedBuild(xLabels)
 
 
-                    // Remove old elements
+                    // Remove old elements - ensure complete cleanup
                     svg.selectAll(".layer").remove()
                     svg.selectAll(".hover-line").remove()
                     svg.selectAll(".hover-circles").remove()
+                    svg.selectAll(".bar-segment").remove()
+                    svg.selectAll("rect").remove()
+                    svg.selectAll("g.layer").remove()
 
                     layer = appendLayersToSvg(svg, layers)
                     rect = appendRectToLayers(xScale, layer)
@@ -1483,6 +1487,9 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
 
                 init:  function(builds, id, clickCallBack){
 
+                    // Clear any existing SVG to prevent duplicates
+                    d3.select(id).selectAll("svg").remove();
+                    
                     // init timeline svg
                     svg = appendSvgToDom(id)
 
@@ -1496,6 +1503,18 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                   
                   },
                 update: function(builds){
+                    // Cancel any pending updates to prevent duplicate renders
+                    if (this._updateTimeout) {
+                      $timeout.cancel(this._updateTimeout);
+                    }
+
+                    // Immediately remove all chart elements to prevent duplicates
+                    svg.selectAll(".layer").remove()
+                    svg.selectAll(".hover-line").remove()
+                    svg.selectAll(".hover-circles").remove()
+                    svg.select(".x").remove()
+                    svg.select(".y").remove()
+                    svg.select(".grid").remove()
 
                     // fade timeline
                     if (rect) {
@@ -1512,14 +1531,24 @@ angular.module("app.compare", ['googlechart', 'svc.query'])
                       .style("fill", "white")
 
                     // after fading out view...
-                    $timeout(function(){
-                        // remove x axis from dom
+                    var self = this;
+                    this._updateTimeout = $timeout(function(){
+                        // Ensure all elements are removed before re-rendering
+                        svg.selectAll(".layer").remove()
+                        svg.selectAll(".hover-line").remove()
+                        svg.selectAll(".hover-circles").remove()
                         svg.select(".x").remove()
                         svg.select(".y").remove()
-                        // remove bars from dom
-                        if (layer) layer.remove()
+                        svg.select(".grid").remove()
+                        
+                        // Reset rect and layer references
+                        rect = null;
+                        layer = null;
+                        
                         // re-render timeline
                         _render(builds)
+                        
+                        self._updateTimeout = null;
                     }, 250)
 
                   }
@@ -1598,8 +1627,8 @@ angular.module('app.darkmode', [])
 angular.module('svc.data', [])
     .value("DEFAULT_FILTER_BY", 2000)
     .value("DEFAULT_BUILDS_FILTER_BY", 10)
-    .service('Data', ['$location', '$rootScope', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
-        function ($location, $rootScope, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
+    .service('Data', ['$location', '$rootScope', '$timeout', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
+        function ($location, $rootScope, $timeout, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
 
             _versions = []
             _target = "server"
@@ -1611,6 +1640,7 @@ angular.module('svc.data', [])
             _buildJobs = []
             _buildJobsActive = []
             _sideBarItems = {}
+            _reverseMode = { features: false, platforms: false }
             _filterBy = DEFAULT_FILTER_BY
             _buildsFilterBy = DEFAULT_BUILDS_FILTER_BY
             _initUrlParams = null
@@ -1860,15 +1890,24 @@ angular.module('svc.data', [])
                     
                     return filteredBuilds;
                 },
+                setReverseMode: function(type, enabled) {
+                    _reverseMode[type] = enabled;
+                },
+                getReverseMode: function(type) {
+                    return _reverseMode[type] || false;
+                },
                 toggleItem: function(key, type, disabled){
 
                     // check if item is being disabled
                     if(disabled){
 
+                        // Check if reverse mode is enabled for this type
+                        var isReverseMode = _reverseMode[type] || false;
+
                         // if this is first item to be disabled within os/component
-                        // then inverse toggling is performed
+                        // then inverse toggling is performed (unless in reverse mode)
                         var isAnyOfThisTypeDisabled = _.some(_.map(_sideBarItems[type], "disabled"))
-                        if(!isAnyOfThisTypeDisabled){
+                        if(!isAnyOfThisTypeDisabled && !isReverseMode){
 
                             // very well then, inverse toggling it is
                             // disable every item but this one
@@ -1882,6 +1921,7 @@ angular.module('svc.data', [])
                             // re-enable self
                             updateSidebarItemState(type, key, false)
                         } else {
+                            // In reverse mode OR some items already disabled: just disable this one
                             disableItem(key, type)
                         }
 
@@ -1946,6 +1986,9 @@ angular.module('svc.data', [])
 
                     // drop init params
                     _initUrlParams = null
+                    
+                    // Broadcast that sidebar items are ready
+                    $rootScope.$broadcast('sidebarItemsReady', items);
 
                 },
                 getSideBarItems: function(){
@@ -2052,10 +2095,41 @@ angular.module('svc.data', [])
                     return _build
                 },
                 setUrlParams: function(params){
-
-                    if(_initUrlParams === null){
+                    // Remove forceUpdate from params if present (internal flag, not for URL)
+                    var forceUpdate = params.forceUpdate;
+                    delete params.forceUpdate;
+                    
+                    if(_initUrlParams === null || forceUpdate){
                         params["target"] = _target
                         _initUrlParams = params
+                        // If sidebar items are already loaded and forceUpdate is true, apply URL params immediately
+                        if(forceUpdate && _sideBarItems && Object.keys(_sideBarItems).length > 0){
+                            // Re-apply URL params to existing sidebar items
+                            $timeout(function(){
+                                if(_initUrlParams && (_initUrlParams.target == _target)){
+                                    // disable everything corresponding to filtered type
+                                    _.mapKeys(_sideBarItems, function(values, type){
+                                        if(type in _initUrlParams && type !== 'buildVersion' && type !== 'target'){
+                                            values.forEach(function(v){
+                                                disableItem(v.key, type)
+                                            })
+                                        }
+                                    })
+                                    
+                                    // only enable urlParams
+                                    _.mapKeys(_initUrlParams, function(values, type){
+                                        if(Object.keys(_availableFilters).indexOf(type) != -1 && type !== 'target'){
+                                            var keys = values.split(",")
+                                            keys.forEach(function(k){
+                                                enableItem(k, type)
+                                            })
+                                        }
+                                    })
+                                    
+                                    _initUrlParams = null
+                                }
+                            }, 100);
+                        }
                     }
                 },
                 setJobsPerPage: function(jobsPerPage) {
@@ -2231,6 +2305,12 @@ angular.module('app.main', [])
 
             // update target versions when drop down target changes
             $scope.changeTarget = function(target){
+                // Redirect to Capella Greenboard if Capella is selected
+                if(target == 'capella'){
+                    window.location.href = 'https://greenboard.sc.couchbase.com:4001/';
+                    return;
+                }
+                
                 if(target == 'cblite' || target == 'sync_gateway'){
                     Data.setBuildFilter(0)
                 }
@@ -2483,6 +2563,171 @@ angular.module('app.main', [])
                     end = numPages;
                 }
                 return _.range(start, end);
+            }
+
+            // FAB (Floating Action Button) state
+            $scope.showCopyToast = false;
+
+            // Auto Triage Modal
+            $scope.autoTriageJobName = '';
+            $scope.autoTriageContent = '';
+            $scope.openAutoTriageModal = function(job) {
+                $scope.autoTriageJobName = job.displayName || job.name;
+                var claimText = job.claim || '';
+                // Format the claim - preserve line breaks and format for display
+                // Convert <br> tags to actual line breaks for better formatting
+                claimText = claimText.replace(/<br\s*\/?>/gi, '\n');
+                // Apply formatClaim for JIRA links
+                $scope.autoTriageContent = formatClaim(claimText);
+                $('#autoTriageModal').modal('show');
+            };
+
+            // Jobs Links Modal - Show all jobs with links and server counts
+            $scope.jobsLinksData = [];
+            $scope.openJobsLinksModal = function() {
+                // Get all jobs from current panel
+                var allJobs = $scope.panelTabs[$scope.activePanel].jobs || [];
+                
+                // Prepare data for the modal - filter jobs with >= 7 servers
+                var jobsData = allJobs.map(function(job) {
+                    return {
+                        name: job.name,
+                        displayName: job.displayName,
+                        url: job.url + (job.build_id || ''),
+                        serversCount: (job.servers && job.servers.length) || 0
+                    };
+                }).filter(function(job) {
+                    // Only show jobs with >= 7 servers
+                    return job.serversCount >= 7;
+                }).sort(function(a, b) {
+                    // Sort in descending order by server count
+                    return b.serversCount - a.serversCount;
+                });
+                
+                $scope.jobsLinksData = jobsData;
+                
+                // Open the modal
+                $('#jobsLinksModal').modal('show');
+            };
+
+            // Show toast notification for copy jobs
+            $scope.showCopyToast = false;
+            $scope.showToast = function() {
+                $scope.showCopyToast = true;
+                setTimeout(function() {
+                    $scope.showCopyToast = false;
+                    $scope.$apply();
+                }, 3000);
+            };
+
+            // Copy visible job names to clipboard
+            $scope.copyVisibleJobNames = function() {
+                try {
+                    // Get all jobs from current panel
+                    var allJobs = $scope.panelTabs[$scope.activePanel].jobs || [];
+                    
+                    // Apply sorting if predicate is set (matching the template's orderBy)
+                    var sortedJobs = allJobs;
+                    if ($scope.predicate) {
+                        sortedJobs = _.sortBy(allJobs, function(job) {
+                            // Handle complex predicates like 'totalCount - failCount - skipCount'
+                            if ($scope.predicate === 'totalCount - failCount - skipCount') {
+                                return (job.totalCount || 0) - (job.failCount || 0) - (job.skipCount || 0);
+                            } else if ($scope.predicate === 'failCount || 0') {
+                                return job.failCount || 0;
+                            } else if ($scope.predicate === 'pending || totalCount') {
+                                return job.pending || job.totalCount || 0;
+                            } else if ($scope.predicate === 'totalDuration || 0') {
+                                return job.totalDuration || 0;
+                            } else if ($scope.predicate === 'timestamp || 0') {
+                                return job.timestamp || 0;
+                            } else if ($scope.predicate === 'servers.length') {
+                                return (job.servers && job.servers.length) || 0;
+                            } else if ($scope.predicate.indexOf('variants.') === 0) {
+                                var variantKey = $scope.predicate.replace('variants.', '');
+                                return (job.variants && job.variants[variantKey]) || '';
+                            } else {
+                                return _.get(job, $scope.predicate, '');
+                            }
+                        });
+                        if ($scope.reverse) {
+                            sortedJobs = sortedJobs.reverse();
+                        }
+                    }
+                    
+                    // Get visible jobs based on pagination (matching limitTo filter)
+                    var startIndex = $scope.jobsPage * $scope.jobsPerPage;
+                    var endIndex = Math.min(startIndex + $scope.jobsPerPage, sortedJobs.length);
+                    var visibleJobs = sortedJobs.slice(startIndex, endIndex);
+                    
+                    // Extract job names - use job.name (the actual job name, not displayName)
+                    var jobNames = visibleJobs.map(function(job) {
+                        return job.name || '';
+                    }).filter(function(name) {
+                        return name && name.trim() !== '';
+                    });
+                    
+                    if (jobNames.length === 0) {
+                        alert('No jobs to copy');
+                        return;
+                    }
+                    
+                    // Strip job names: remove everything before first underscore and everything from "bucket_storage" onwards
+                    var strippedJobNames = jobNames.map(function(jobName) {
+                        // Find first underscore
+                        var firstUnderscoreIndex = jobName.indexOf('_');
+                        if (firstUnderscoreIndex === -1) {
+                            // No underscore found, return as is
+                            return jobName;
+                        }
+                        
+                        // Take everything after first underscore
+                        var afterUnderscore = jobName.substring(firstUnderscoreIndex + 1);
+                        
+                        // Find "bucket_storage" (case-insensitive)
+                        var bucketStorageIndex = afterUnderscore.toLowerCase().indexOf('bucket_storage');
+                        if (bucketStorageIndex === -1) {
+                            // No "bucket_storage" found, return everything after first underscore
+                            return afterUnderscore;
+                        }
+                        
+                        // Take everything before "bucket_storage"
+                        return afterUnderscore.substring(0, bucketStorageIndex).trim();
+                    });
+                    
+                    // Join with commas (no spaces)
+                    var jobNamesText = strippedJobNames.join(',');
+                    
+                    // Copy to clipboard
+                    var textArea = document.createElement('textarea');
+                    textArea.value = jobNamesText;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    var successful = false;
+                    try {
+                        successful = document.execCommand('copy');
+                    } catch (err) {
+                        console.error('Fallback: Copy command failed', err);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        // Show toast notification
+                        $scope.showToast();
+                    } else {
+                        // Fallback: show in prompt
+                        prompt('Copy these job names:', jobNamesText);
+                    }
+                } catch (err) {
+                    console.error('Error copying job names:', err);
+                    alert('Failed to copy job names. Please try again.');
+                }
             }
             function resetPage() {
                 Data.setJobsPage(0);
@@ -3560,6 +3805,25 @@ angular.module('app.main', [])
                 scope.setPage = scope.$parent.setPage;
                 scope.jobsPerPageChoices = [20, 50, 100, 500, 1000, 'All'];
                 scope.jobsPerPage = Data.getJobsPerPage();
+                
+                // Check if this is top pagination (has class 'top-pagination')
+                scope.isTopPagination = element.hasClass('top-pagination');
+                
+                // Initialize copy button state
+                scope.copyButtonCopied = false;
+                
+                // Override copyVisibleJobNames to add visual feedback
+                scope.copyVisibleJobNames = function() {
+                    if (scope.$parent.copyVisibleJobNames) {
+                        scope.$parent.copyVisibleJobNames();
+                        // Add visual feedback
+                        scope.copyButtonCopied = true;
+                        setTimeout(function() {
+                            scope.copyButtonCopied = false;
+                            scope.$apply();
+                        }, 2000);
+                    }
+                };
 
                 scope.$watch(function() { return Data.getJobsPage() }, function(jobsPage) {
                     scope.jobsPage = jobsPage;
@@ -3684,6 +3948,234 @@ angular.module('app.main', [])
                 }
             }
         }
+    }])
+
+    .controller("ViewsCtrl", ['$scope', 'Views', '$timeout', '$rootScope', function($scope, Views, $timeout, $rootScope) {
+        // FAB state
+        $scope.fabExpanded = false;
+        
+        // Load views
+        $scope.views = Views.getAll();
+        
+        // Share functions on $rootScope so modals can access them
+        $rootScope.viewsCtrl = {
+            saveCurrentView: null,
+            openSaveViewModal: null,
+            openShareViewModal: null,
+            openImportViewModal: null,
+            selectViewToShare: null,
+            copyShareCode: null,
+            copyShareUrl: null,
+            importView: null,
+            refreshViews: null,
+            showToast: null
+        };
+        
+        // Toggle FAB
+        $scope.toggleFab = function() {
+            $scope.fabExpanded = !$scope.fabExpanded;
+            if ($scope.fabExpanded) {
+                document.body.classList.add('fab-overlay-active');
+                // Refresh views when opening
+                $scope.refreshViews();
+            } else {
+                document.body.classList.remove('fab-overlay-active');
+            }
+        };
+        
+        // Refresh views list
+        $scope.refreshViews = function() {
+            $scope.views = Views.getAll();
+            if ($rootScope.viewsCtrl) {
+                $rootScope.viewsCtrl.refreshViews = $scope.refreshViews;
+            }
+        };
+        
+        // Apply a view
+        $scope.applyView = function(view) {
+            var result = Views.apply(view);
+            if (result.success) {
+                // View opens in new tab, no feedback needed
+                $scope.toggleFab(); // Close FAB after applying
+            } else {
+                $scope.showToast('Failed to apply view: ' + (result.error || 'Unknown error'), true);
+            }
+        };
+        
+        // Delete a view
+        $scope.deleteView = function(viewId, $event) {
+            if ($event) {
+                $event.preventDefault();
+                $event.stopPropagation();
+            }
+            
+            if (confirm('Are you sure you want to delete this view?')) {
+                var result = Views.delete(viewId);
+                if (result.success) {
+                    // Use $timeout to ensure DOM updates after deletion
+                    $timeout(function() {
+                        $scope.refreshViews();
+                    }, 0);
+                    $scope.showToast('View deleted successfully!');
+                } else {
+                    $scope.showToast('Failed to delete view: ' + (result.error || 'Unknown error'), true);
+                }
+            }
+        };
+        
+        // Clear all views
+        $scope.clearAllViews = function() {
+            if (confirm('Are you sure you want to delete ALL views? This cannot be undone.')) {
+                var result = Views.clearAll();
+                if (result.success) {
+                    $scope.refreshViews();
+                    $scope.showToast('All views cleared!');
+                } else {
+                    $scope.showToast('Failed to clear views: ' + (result.error || 'Unknown error'), true);
+                }
+            }
+        };
+        
+        // Save current view modal
+        $scope.openSaveViewModal = function() {
+            $scope.newViewName = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.saveCurrentView = $scope.saveCurrentView;
+            $rootScope.viewsCtrl.openSaveViewModal = $scope.openSaveViewModal;
+            $rootScope.newViewName = '';
+            $('#saveViewModal').modal('show');
+        };
+        
+        $scope.saveCurrentView = function() {
+            var viewName = $rootScope.newViewName || '';
+            if (!viewName || viewName.trim() === '') {
+                alert('Please enter a view name');
+                return;
+            }
+            
+            var result = Views.saveCurrent(viewName.trim());
+            if (result.success) {
+                $('#saveViewModal').modal('hide');
+                $rootScope.newViewName = '';
+                // Use $timeout to ensure DOM updates after save
+                $timeout(function() {
+                    $scope.refreshViews();
+                }, 0);
+                $scope.showToast('View "' + viewName + '" saved successfully!');
+            } else {
+                alert('Failed to save view: ' + (result.error || 'Unknown error'));
+            }
+        };
+        
+        // Share functions on rootScope
+        $rootScope.viewsCtrl.saveCurrentView = $scope.saveCurrentView;
+        $rootScope.viewsCtrl.openSaveViewModal = $scope.openSaveViewModal;
+        
+        // Share view modal
+        $scope.openShareViewModal = function() {
+            $scope.shareViewList = Views.getAll();
+            $scope.selectedShareView = null;
+            $scope.shareCode = '';
+            $scope.shareUrl = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.openShareViewModal = $scope.openShareViewModal;
+            $rootScope.viewsCtrl.selectViewToShare = $scope.selectViewToShare;
+            $rootScope.viewsCtrl.copyShareCode = $scope.copyShareCode;
+            $rootScope.viewsCtrl.copyShareUrl = $scope.copyShareUrl;
+            $rootScope.shareViewList = $scope.shareViewList;
+            $rootScope.selectedShareView = null;
+            $rootScope.shareCode = '';
+            $rootScope.shareUrl = '';
+            $('#shareViewModal').modal('show');
+        };
+        
+        $scope.selectViewToShare = function(view) {
+            if (!view) return;
+            $rootScope.selectedShareView = view;
+            var result = Views.share(view);
+            if (result.success) {
+                $rootScope.shareCode = result.code;
+                $rootScope.shareUrl = result.url;
+            } else {
+                alert('Failed to generate share code: ' + (result.error || 'Unknown error'));
+            }
+        };
+        
+        $scope.copyShareCode = function() {
+            var codeInput = document.getElementById('shareCodeInput');
+            codeInput.select();
+            document.execCommand('copy');
+            $scope.showToast('Share code copied to clipboard!');
+        };
+        
+        $scope.copyShareUrl = function() {
+            var urlInput = document.getElementById('shareUrlInput');
+            urlInput.select();
+            document.execCommand('copy');
+            $scope.showToast('Share URL copied to clipboard!');
+        };
+        
+        // Import view modal
+        $scope.openImportViewModal = function() {
+            $scope.importCode = '';
+            $scope.toggleFab(); // Close FAB
+            // Share functions on rootScope
+            $rootScope.viewsCtrl.openImportViewModal = $scope.openImportViewModal;
+            $rootScope.viewsCtrl.importView = $scope.importView;
+            $rootScope.importCode = '';
+            $('#importViewModal').modal('show');
+        };
+        
+        $scope.importView = function() {
+            var importCode = $rootScope.importCode || '';
+            if (!importCode || importCode.trim() === '') {
+                alert('Please enter a view code');
+                return;
+            }
+            
+            var result = Views.import(importCode.trim());
+            if (result.success) {
+                $scope.refreshViews();
+                $('#importViewModal').modal('hide');
+                $scope.showToast('View imported successfully!');
+                $rootScope.importCode = '';
+                
+                // Optionally apply the imported view
+                if (confirm('Would you like to apply this view now?')) {
+                    $scope.applyView(result.view);
+                }
+            } else {
+                alert('Failed to import view: ' + (result.error || 'Invalid view code'));
+            }
+        };
+        
+        // Share remaining functions on rootScope
+        $rootScope.viewsCtrl.openShareViewModal = $scope.openShareViewModal;
+        $rootScope.viewsCtrl.openImportViewModal = $scope.openImportViewModal;
+        $rootScope.viewsCtrl.selectViewToShare = $scope.selectViewToShare;
+        $rootScope.viewsCtrl.copyShareCode = $scope.copyShareCode;
+        $rootScope.viewsCtrl.copyShareUrl = $scope.copyShareUrl;
+        $rootScope.viewsCtrl.importView = $scope.importView;
+        $rootScope.viewsCtrl.showToast = $scope.showToast;
+        
+        // Toast notification
+        $scope.showToast = function(message, isError) {
+            $scope.toast = { message: message, isError: isError || false, show: true };
+            $timeout(function() {
+                $scope.toast.show = false;
+            }, 3000);
+        };
+        
+        // Check URL for view code on load
+        $timeout(function() {
+            var importedView = Views.checkUrlForView();
+            if (importedView) {
+                $scope.refreshViews();
+                $scope.showToast('View imported from URL: ' + importedView.name);
+            }
+        }, 500);
     }])
 
 
@@ -3814,11 +4306,13 @@ angular.module('app.sidebar', [])
  	  	return {
 	  		restrict: 'E',
 	  		scope: {},
-	  		templateUrl: 'partials/sidebar.html',
+	  		templateUrl: 'partials/sidebar.html?v=' + Date.now(),
 	  		link: function(scope, elem, attrs){
 
 	  		  scope.showPerc = false
 			  scope.disabled = {}
+			  scope.reverseMode = { features: false, platforms: false }
+			  scope.lowRunRateFilter = { features: false, platforms: false }
 
               scope.buildVersion = Data.getBuild()
 			  scope.targetBy = Data.getCurrentTarget()
@@ -3828,6 +4322,38 @@ angular.module('app.sidebar', [])
 				scope.disabled[type] = isDisabled
 	  		  	Data.toggleAllSidebarItems(type, isDisabled)
 	  		  }
+
+			  scope.toggleReverseMode = function(type) {
+				scope.reverseMode[type] = !scope.reverseMode[type];
+				// Store in Data service so sidebar-item can access it
+				Data.setReverseMode(type, scope.reverseMode[type]);
+			  }
+
+			  scope.toggleLowRunRateFilter = function(type) {
+				scope.lowRunRateFilter[type] = !scope.lowRunRateFilter[type];
+			  }
+
+			  // Filter features based on run rate
+			  scope.getFilteredFeatures = function() {
+				if (!scope.sidebarItems || !scope.sidebarItems.features) {
+					return [];
+				}
+				
+				if (!scope.lowRunRateFilter.features) {
+					return scope.sidebarItems.features;
+				}
+				
+				// Filter features with run rate < 10%
+				return scope.sidebarItems.features.filter(function(featureKey) {
+					var stats = Data.getItemStats(featureKey, 'features');
+					if (!stats || !stats.percStats || !stats.percStats.run) {
+						return false;
+					}
+					// Extract numeric value from run rate (e.g., "5.2%" -> 5.2)
+					var runRate = parseFloat(stats.percStats.run.toString().replace('%', '').replace(/\s/g, ''));
+					return !isNaN(runRate) && runRate < 10;
+				});
+			  }
 			  scope.variantName = function(name) {
 				return name.split("_").map(function(part) {
 					return part[0].toUpperCase() + part.slice(1)
@@ -4309,3 +4835,618 @@ angular.module('app.target', [])
 ;
 
 
+
+angular.module('app.views', [])
+  .service('Views', ['Data', 'DarkMode', '$state', '$rootScope', '$location', '$timeout', function(Data, DarkMode, $state, $rootScope, $location, $timeout) {
+    var STORAGE_KEY = 'greenboard_views';
+    
+    // Get all views from localStorage
+    function getViews() {
+      try {
+        var viewsJson = localStorage.getItem(STORAGE_KEY);
+        return viewsJson ? JSON.parse(viewsJson) : [];
+      } catch (e) {
+        console.error('Error loading views:', e);
+        return [];
+      }
+    }
+    
+    // Save views to localStorage
+    function saveViews(views) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
+        return true;
+      } catch (e) {
+        console.error('Error saving views:', e);
+        return false;
+      }
+    }
+    
+    // Generate a shareable code from view data
+    function encodeView(view) {
+      try {
+        var viewData = {
+          n: view.name,
+          f: view.features || [],
+          p: view.platforms || [],
+          v: view.version || '',
+          t: view.target || 'server',
+          d: view.darkMode || false
+        };
+        return btoa(JSON.stringify(viewData));
+      } catch (e) {
+        console.error('Error encoding view:', e);
+        return null;
+      }
+    }
+    
+    // Decode a shareable code to view data
+    function decodeView(code) {
+      try {
+        var viewData = JSON.parse(atob(code));
+        return {
+          name: viewData.n,
+          features: viewData.f || [],
+          platforms: viewData.p || [],
+          version: viewData.v || '',
+          target: viewData.t || 'server',
+          darkMode: viewData.d || false
+        };
+      } catch (e) {
+        console.error('Error decoding view:', e);
+        return null;
+      }
+    }
+    
+    var service = {
+      // Get all saved views
+      getAll: function() {
+        return getViews();
+      },
+      
+      // Save current state as a view
+      saveCurrent: function(name) {
+        if (!name || name.trim() === '') {
+          return { success: false, error: 'View name is required' };
+        }
+        
+        // Get current state
+        var currentState = this.getCurrentState();
+        currentState.name = name.trim();
+        currentState.createdAt = new Date().toISOString();
+        currentState.id = Date.now().toString(); // Simple ID generation
+        
+        // Get existing views
+        var views = getViews();
+        
+        // Check if name already exists
+        var existingIndex = views.findIndex(function(v) {
+          return v.name.toLowerCase() === currentState.name.toLowerCase();
+        });
+        
+        if (existingIndex >= 0) {
+          // Update existing view
+          views[existingIndex] = currentState;
+        } else {
+          // Add new view
+          views.push(currentState);
+        }
+        
+        if (saveViews(views)) {
+          return { success: true, view: currentState };
+        } else {
+          return { success: false, error: 'Failed to save view' };
+        }
+      },
+      
+      // Get current application state
+      getCurrentState: function() {
+        // Get selected features (enabled ones)
+        var features = [];
+        var platforms = [];
+        
+        if (Data.getSideBarItems && Data.getSideBarItems()) {
+          var sidebarItems = Data.getSideBarItems();
+          
+          // Get enabled features
+          if (sidebarItems.features) {
+            features = sidebarItems.features
+              .filter(function(item) { return !item.disabled; })
+              .map(function(item) { return item.key; });
+          }
+          
+          // Get enabled platforms
+          if (sidebarItems.platforms) {
+            platforms = sidebarItems.platforms
+              .filter(function(item) { return !item.disabled; })
+              .map(function(item) { return item.key; });
+          }
+        }
+        
+        return {
+          features: features,
+          platforms: platforms,
+          version: Data.getSelectedVersion() || '',
+          build: Data.getBuild() || '', // Store full build like "8.0.0-1442"
+          target: Data.getCurrentTarget() || 'server',
+          darkMode: DarkMode.isDarkMode()
+        };
+      },
+      
+      // Apply a view (restore state) - Simple: generate URL and open in new tab
+      apply: function(view) {
+        console.log('Views.apply called with view:', view);
+        if (!view) {
+          return { success: false, error: 'Invalid view' };
+        }
+        
+        // Build the URL with all parameters
+        var target = view.target || 'server';
+        var version = view.version || '8.1.0';
+        var build = view.build ? view.build.split('-').pop() : 'latest';
+        
+        // Build URL path
+        var url = window.location.origin + window.location.pathname + 
+                  '#!/' + target + '/' + version + '/' + build;
+        
+        // Add query parameters
+        var params = [];
+        
+        if (view.features && view.features.length > 0) {
+          params.push('features=' + encodeURIComponent(view.features.join(',')));
+        }
+        
+        if (view.platforms && view.platforms.length > 0) {
+          params.push('platforms=' + encodeURIComponent(view.platforms.join(',')));
+        }
+        
+        if (params.length > 0) {
+          url += '?' + params.join('&');
+        }
+        
+        // Open in new tab
+        window.open(url, '_blank');
+        
+        return { success: true };
+      },
+      
+      // Old apply function - keeping for reference but not using
+      _applyOld: function(view) {
+        console.log('Views.apply called with view:', view);
+        if (!view) {
+          return { success: false, error: 'Invalid view' };
+        }
+        
+        // Store view data for later application
+        var viewToApply = angular.copy(view);
+        console.log('View to apply:', viewToApply);
+        
+        // Apply dark mode first
+        if (viewToApply.darkMode !== undefined) {
+          var currentDarkMode = DarkMode.isDarkMode();
+          if (currentDarkMode !== viewToApply.darkMode) {
+            DarkMode.toggle();
+          }
+        }
+        
+        // Navigate to target/version/build if different
+        var currentTarget = Data.getCurrentTarget();
+        var currentVersion = Data.getSelectedVersion();
+        var currentBuild = Data.getBuild();
+        var needsNavigation = false;
+        
+        if (viewToApply.target && viewToApply.target !== currentTarget) {
+          needsNavigation = true;
+          // Navigate to target/version, build will be applied after navigation
+          $state.go('target.version.builds.build', { 
+            target: viewToApply.target, 
+            version: viewToApply.version || 'latest',
+            build: viewToApply.build ? viewToApply.build.split('-').pop() : 'latest'
+          });
+        } else if (viewToApply.version && viewToApply.version !== currentVersion) {
+          needsNavigation = true;
+          // Navigate to version, build will be applied after navigation
+          $state.go('target.version.builds.build', { 
+            target: currentTarget, 
+            version: viewToApply.version,
+            build: viewToApply.build ? viewToApply.build.split('-').pop() : 'latest'
+          });
+        } else if (viewToApply.build && viewToApply.build !== currentBuild) {
+          needsNavigation = true;
+          // Navigate to specific build
+          var buildNumber = viewToApply.build.split('-').pop();
+          $state.go('target.version.builds.build', { 
+            target: currentTarget, 
+            version: currentVersion,
+            build: buildNumber
+          });
+        }
+        
+        // OLD FILTER APPLICATION LOGIC - NOT USED ANYMORE
+        var applyFilters = function() {
+          // Wait a bit for sidebar items to be loaded
+          var attempts = 0;
+          var maxAttempts = 80; // 8 seconds max wait (increased for navigation)
+          var lastItemsCheck = null;
+          var stableCheckCount = 0;
+          var requiredStableChecks = 3; // Require 3 consecutive stable checks
+          
+          var tryApplyFilters = function() {
+            attempts++;
+            console.log('tryApplyFilters attempt:', attempts);
+            var sidebarItems = Data.getSideBarItems();
+            console.log('Sidebar items:', sidebarItems);
+            
+            // Check if sidebar items are loaded and have data
+            if (!sidebarItems || 
+                !sidebarItems.features || sidebarItems.features.length === 0 ||
+                !sidebarItems.platforms || sidebarItems.platforms.length === 0) {
+              console.log('Sidebar items not ready, retrying...');
+              lastItemsCheck = null;
+              stableCheckCount = 0;
+              if (attempts < maxAttempts) {
+                $timeout(tryApplyFilters, 100);
+                return;
+              } else {
+                console.warn('Sidebar items not loaded after max attempts');
+                return;
+              }
+            }
+            
+            // Check if sidebar items are stable (not changing)
+            var currentCheck = JSON.stringify({
+              features: sidebarItems.features.map(function(f) { return f.key; }),
+              platforms: sidebarItems.platforms.map(function(p) { return p.key; })
+            });
+            
+            if (lastItemsCheck === currentCheck) {
+              stableCheckCount++;
+              console.log('Sidebar items stable check:', stableCheckCount, '/', requiredStableChecks);
+            } else {
+              // Items changed, reset stability check
+              lastItemsCheck = currentCheck;
+              stableCheckCount = 1;
+              console.log('Sidebar items changed, resetting stability check');
+            }
+            
+            // Require items to be stable before applying filters
+            if (stableCheckCount < requiredStableChecks) {
+              if (attempts < maxAttempts) {
+                $timeout(tryApplyFilters, 150);
+                return;
+              } else {
+                console.warn('Sidebar items not stable after max attempts, proceeding anyway...');
+              }
+            }
+            
+            console.log('Sidebar items loaded and stable, applying filters...');
+            
+            // Helper function to apply filters for a type
+            var applyFiltersForType = function(type, savedKeys) {
+              // Get fresh state
+              var currentItems = Data.getSideBarItems()[type];
+              if (!currentItems || currentItems.length === 0) {
+                console.warn('No items found for type:', type);
+                return;
+              }
+              
+              var totalCount = currentItems.length;
+              var savedCount = savedKeys.length;
+              
+              console.log('Applying filters for', type, 'saved keys:', savedKeys, 'total:', totalCount);
+              
+              // Check current state - are all items enabled?
+              var allCurrentlyEnabled = currentItems.every(function(item) { return !item.disabled; });
+              console.log('All currently enabled:', allCurrentlyEnabled);
+              
+              if (savedCount === totalCount) {
+                // All should be enabled - just enable any that are disabled
+                console.log('All should be enabled');
+                currentItems.forEach(function(item) {
+                  if (item.disabled) {
+                    console.log('Enabling:', item.key);
+                    Data.toggleItem(item.key, type, true);
+                  }
+                });
+              } else {
+                // Some should be disabled
+                // Find items that should be enabled vs disabled
+                var itemsToEnable = currentItems.filter(function(item) {
+                  return savedKeys.indexOf(item.key) !== -1;
+                });
+                var itemsToDisable = currentItems.filter(function(item) {
+                  return savedKeys.indexOf(item.key) === -1;
+                });
+                
+                console.log('Items to enable:', itemsToEnable.map(function(i) { return i.key; }));
+                console.log('Items to disable:', itemsToDisable.map(function(i) { return i.key; }));
+                
+                if (allCurrentlyEnabled && itemsToDisable.length > 0) {
+                  // All are currently enabled - use inverse toggling
+                  // Disable the first item that should be disabled
+                  // This will trigger inverse toggling: it will enable that item and disable all others
+                  var firstToDisable = itemsToDisable[0];
+                  console.log('Triggering inverse toggling by disabling:', firstToDisable.key);
+                  Data.toggleItem(firstToDisable.key, type, false);
+                  
+                  // After inverse toggling, firstToDisable is now enabled, all others are disabled
+                  // Now we need to enable the ones that should be enabled
+                  $timeout(function() {
+                    console.log('Enabling items that should be enabled');
+                    var freshItems = Data.getSideBarItems()[type];
+                    itemsToEnable.forEach(function(targetKey) {
+                      var item = freshItems.find(function(i) { return i.key === targetKey.key; });
+                      if (item && item.disabled) {
+                        console.log('Enabling:', item.key);
+                        Data.toggleItem(item.key, type, true);
+                      }
+                    });
+                  }, 300);
+                } else {
+                  // Some items are already disabled - work with current state
+                  console.log('Some items already disabled, working with current state');
+                  
+                  // First, enable items that should be enabled
+                  itemsToEnable.forEach(function(item) {
+                    if (item.disabled) {
+                      console.log('Enabling:', item.key);
+                      Data.toggleItem(item.key, type, true);
+                    }
+                  });
+                  
+                  // Then disable items that should be disabled
+                  $timeout(function() {
+                    var freshItems = Data.getSideBarItems()[type];
+                    var allNowEnabled = freshItems.every(function(item) { return !item.disabled; });
+                    
+                    if (!allNowEnabled) {
+                      itemsToDisable.forEach(function(targetKey) {
+                        var item = freshItems.find(function(i) { return i.key === targetKey.key; });
+                        if (item && !item.disabled) {
+                          console.log('Disabling:', item.key);
+                          Data.toggleItem(item.key, type, false);
+                        }
+                      });
+                    }
+                  }, 300);
+                }
+              }
+            };
+            
+            // Apply feature filters
+            if (viewToApply.features && viewToApply.features.length > 0) {
+              console.log('Applying feature filters:', viewToApply.features);
+              applyFiltersForType('features', viewToApply.features);
+            } else {
+              console.log('No feature filters to apply');
+            }
+            
+            // Apply platform filters
+            if (viewToApply.platforms && viewToApply.platforms.length > 0) {
+              console.log('Applying platform filters:', viewToApply.platforms);
+              applyFiltersForType('platforms', viewToApply.platforms);
+            } else {
+              console.log('No platform filters to apply');
+            }
+            
+            // Update URL parameters to match the applied view after filters are applied
+            $timeout(function() {
+              var currentItems = Data.getSideBarItems();
+              
+              // Get actually enabled items from sidebar (not from viewToApply)
+              var enabledFeatures = [];
+              var enabledPlatforms = [];
+              
+              if (currentItems.features) {
+                enabledFeatures = currentItems.features
+                  .filter(function(item) { return !item.disabled; })
+                  .map(function(item) { return item.key; });
+              }
+              
+              if (currentItems.platforms) {
+                enabledPlatforms = currentItems.platforms
+                  .filter(function(item) { return !item.disabled; })
+                  .map(function(item) { return item.key; });
+              }
+              
+              // Build URL params for features
+              if (currentItems.features && enabledFeatures.length > 0) {
+                var totalFeatures = currentItems.features.length;
+                if (enabledFeatures.length < totalFeatures) {
+                  $location.search('features', enabledFeatures.join(','));
+                } else {
+                  $location.search('features', null);
+                }
+              }
+              
+              // Build URL params for platforms
+              if (currentItems.platforms && enabledPlatforms.length > 0) {
+                var totalPlatforms = currentItems.platforms.length;
+                if (enabledPlatforms.length < totalPlatforms) {
+                  $location.search('platforms', enabledPlatforms.join(','));
+                } else {
+                  $location.search('platforms', null);
+                }
+              }
+              
+              // Update URL without reloading
+              $location.replace();
+              
+              // Broadcast filter change to refresh jobs table
+              $timeout(function() {
+                $rootScope.$broadcast('sidebarFilterChanged');
+              }, 300);
+            }, 1200);
+            
+            // Broadcast that view has been applied
+            $rootScope.$broadcast('viewApplied', viewToApply);
+          };
+          
+          if (needsNavigation) {
+            // Wait for state change, then listen for sidebar items to be ready
+            var stateChangeUnregister = $rootScope.$on('$stateChangeSuccess', function() {
+              stateChangeUnregister();
+              
+              // Listen for sidebar items to be ready
+              var sidebarReadyUnregister = $rootScope.$on('sidebarItemsReady', function(event, items) {
+                sidebarReadyUnregister();
+                console.log('Sidebar items ready event received, applying filters...');
+                // Wait a bit for sidebar to fully initialize
+                $timeout(function() {
+                  tryApplyFilters();
+                }, 500);
+              });
+              
+              // Fallback: if event doesn't fire, try after delay
+              $timeout(function() {
+                if (sidebarReadyUnregister) {
+                  sidebarReadyUnregister();
+                  console.log('Sidebar ready event not received, trying fallback...');
+                  $timeout(tryApplyFilters, 500);
+                }
+              }, 3000);
+            });
+          } else {
+            // Check if sidebar is already ready
+            var sidebarItems = Data.getSideBarItems();
+            if (sidebarItems && sidebarItems.features && sidebarItems.features.length > 0 && 
+                sidebarItems.platforms && sidebarItems.platforms.length > 0) {
+              // Sidebar already ready, apply immediately
+              $timeout(tryApplyFilters, 200);
+            } else {
+              // Wait for sidebar to be ready
+              var sidebarReadyUnregister = $rootScope.$on('sidebarItemsReady', function(event, items) {
+                sidebarReadyUnregister();
+                console.log('Sidebar items ready event received, applying filters...');
+                $timeout(tryApplyFilters, 200);
+              });
+              
+              // Fallback
+              $timeout(function() {
+                if (sidebarReadyUnregister) {
+                  sidebarReadyUnregister();
+                  $timeout(tryApplyFilters, 300);
+                }
+              }, 2000);
+            }
+          }
+        };
+        
+        applyFilters();
+        
+        return { success: true };
+      },
+      
+      // Delete a view by ID
+      delete: function(viewId) {
+        var views = getViews();
+        var filtered = views.filter(function(v) { return v.id !== viewId; });
+        
+        if (saveViews(filtered)) {
+          return { success: true };
+        } else {
+          return { success: false, error: 'Failed to delete view' };
+        }
+      },
+      
+      // Clear all views
+      clearAll: function() {
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: 'Failed to clear views' };
+        }
+      },
+      
+      // Generate shareable code for a view
+      share: function(view) {
+        var code = encodeView(view);
+        if (code) {
+          // Generate URL with code
+          var url = window.location.origin + window.location.pathname + '?view=' + code;
+          return { success: true, code: code, url: url };
+        } else {
+          return { success: false, error: 'Failed to generate share code' };
+        }
+      },
+      
+      // Import view from code (handles both code and URL)
+      import: function(codeOrUrl) {
+        // Extract code from URL if it's a URL
+        var code = codeOrUrl;
+        if (codeOrUrl && typeof codeOrUrl === 'string') {
+          if (codeOrUrl.indexOf('?view=') >= 0) {
+            // It's a URL, extract the code
+            var urlParts = codeOrUrl.split('?view=');
+            if (urlParts.length > 1) {
+              code = urlParts[1].split('&')[0]; // Get code, ignore other params
+            }
+          } else if (codeOrUrl.indexOf('view=') >= 0) {
+            // URL with view param
+            var match = codeOrUrl.match(/view=([^&]+)/);
+            if (match && match[1]) {
+              code = match[1];
+            }
+          }
+        }
+        
+        var view = decodeView(code);
+        if (view) {
+          // Save the imported view
+          view.id = Date.now().toString();
+          view.createdAt = new Date().toISOString();
+          view.imported = true;
+          
+          var views = getViews();
+          views.push(view);
+          
+          if (saveViews(views)) {
+            return { success: true, view: view };
+          } else {
+            return { success: false, error: 'Failed to save imported view' };
+          }
+        } else {
+          return { success: false, error: 'Invalid view code' };
+        }
+      },
+      
+      // Check URL for view code and import if present
+      checkUrlForView: function() {
+        // Parse URL params manually for compatibility
+        var search = window.location.search.substring(1);
+        var params = {};
+        if (search) {
+          var pairs = search.split('&');
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i].split('=');
+            params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1] || '');
+          }
+        }
+        
+        var viewCode = params.view;
+        
+        if (viewCode) {
+          var result = this.import(viewCode);
+          if (result.success) {
+            // Apply the imported view
+            this.apply(result.view);
+            // Remove view param from URL
+            var newUrl = window.location.pathname;
+            var newParams = [];
+            for (var key in params) {
+              if (key !== 'view') {
+                newParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
+              }
+            }
+            newUrl += newParams.length > 0 ? '?' + newParams.join('&') : '';
+            window.history.replaceState({}, '', newUrl);
+            return result.view;
+          }
+        }
+        return null;
+      }
+    };
+    
+    return service;
+  }]);

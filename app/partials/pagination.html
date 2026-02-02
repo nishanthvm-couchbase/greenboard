@@ -1,5 +1,8 @@
 <div id="pagination-wrapper">
     <select class="form-control" id="jobs-per-page" ng-change="onJobsPerPageChange()" ng-model="jobsPerPage" ng-options="i+' jobs per page' for i in jobsPerPageChoices"></select>
+    <button class="btn btn-default copy-jobs-btn" ng-class="{'copied': copyButtonCopied}" ng-click="copyVisibleJobNames()" title="Copy visible job names" ng-if="isTopPagination">
+      <i class="fa" ng-class="copyButtonCopied ? 'fa-check' : 'fa-copy'"></i> <span ng-bind="copyButtonCopied ? 'Copied!' : 'Copy Jobs'"></span>
+    </button>
     <ul class="pagination" id="pagination">
         <li class="page-item" ng-class="{'disabled': jobsPage === 0}"><a class="page-link" ng-click="prevPage()">Previous</a></li>
         <li ng-repeat="n in pageNumbers()" ng-class="{active: n == jobsPage}" ng-click="setPage()">

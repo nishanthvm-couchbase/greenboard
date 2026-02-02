@@ -107,7 +107,13 @@ async function _getmulti(bucket, docIds, retries = 2) {
             } catch (err) {
                 lastError = err;
                 // Document might not exist, return null
-                if (err.code === 13) { // KEY_ENOENT
+                // SDK error shapes vary: sometimes `err.code === 13`, sometimes `err.name === 'DocumentNotFoundError'`
+                // with `err.cause.code === 101`.
+                const notFound =
+                    err.code === 13 || // KEY_ENOENT
+                    err.name === 'DocumentNotFoundError' ||
+                    (err.cause && (err.cause.code === 101 || err.cause.name === 'document_not_found'));
+                if (notFound) {
                     return { id: docId, value: null, cas: null };
                 }
                 // Retry on timeout errors (code 14 = unambiguous_timeout)
@@ -231,9 +237,16 @@ module.exports = async function () {
             return await _query(bucket, queryStr);
         },
         queryBuilds: async function (bucket, version, testsFilter, buildsFilter, filters) {
-            // Query to get build document keys - we'll calculate totals from individual jobs
-            var Q = "SELECT `build` FROM `greenboard` WHERE `build` LIKE '" + version + "%' " +
-                " AND type = '" + bucket + "' ORDER BY `build` DESC limit " + buildsFilter;
+            // Query build documents directly (doc ids are `${build}_${bucket}`)
+            // This avoids duplicates from job documents and ensures the list is complete.
+            // Example id: `8.1.0-1442_server`
+            var Q =
+                "SELECT DISTINCT SPLIT(META().id,'_')[0] AS `build` " +
+                "FROM `greenboard` " +
+                "WHERE META().id LIKE '" + version + "%_" + bucket + "' " +
+                " AND META().id NOT LIKE 'existing_%' " +
+                "ORDER BY `build` DESC " +
+                "LIMIT " + buildsFilter;
 
             // Parse filters - expect comma-separated values
             var platformFilters = filters && filters.platforms ? filters.platforms.split(',') : null;

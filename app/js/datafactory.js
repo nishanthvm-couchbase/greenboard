@@ -1,8 +1,8 @@
 angular.module('svc.data', [])
     .value("DEFAULT_FILTER_BY", 2000)
     .value("DEFAULT_BUILDS_FILTER_BY", 10)
-    .service('Data', ['$location', '$rootScope', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
-        function ($location, $rootScope, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
+    .service('Data', ['$location', '$rootScope', '$timeout', 'DEFAULT_FILTER_BY', 'DEFAULT_BUILDS_FILTER_BY',
+        function ($location, $rootScope, $timeout, DEFAULT_FILTER_BY, DEFAULT_BUILDS_FILTER_BY){
 
             _versions = []
             _target = "server"
@@ -14,6 +14,7 @@ angular.module('svc.data', [])
             _buildJobs = []
             _buildJobsActive = []
             _sideBarItems = {}
+            _reverseMode = { features: false, platforms: false }
             _filterBy = DEFAULT_FILTER_BY
             _buildsFilterBy = DEFAULT_BUILDS_FILTER_BY
             _initUrlParams = null
@@ -263,15 +264,24 @@ angular.module('svc.data', [])
                     
                     return filteredBuilds;
                 },
+                setReverseMode: function(type, enabled) {
+                    _reverseMode[type] = enabled;
+                },
+                getReverseMode: function(type) {
+                    return _reverseMode[type] || false;
+                },
                 toggleItem: function(key, type, disabled){
 
                     // check if item is being disabled
                     if(disabled){
 
+                        // Check if reverse mode is enabled for this type
+                        var isReverseMode = _reverseMode[type] || false;
+
                         // if this is first item to be disabled within os/component
-                        // then inverse toggling is performed
+                        // then inverse toggling is performed (unless in reverse mode)
                         var isAnyOfThisTypeDisabled = _.some(_.map(_sideBarItems[type], "disabled"))
-                        if(!isAnyOfThisTypeDisabled){
+                        if(!isAnyOfThisTypeDisabled && !isReverseMode){
 
                             // very well then, inverse toggling it is
                             // disable every item but this one
@@ -285,6 +295,7 @@ angular.module('svc.data', [])
                             // re-enable self
                             updateSidebarItemState(type, key, false)
                         } else {
+                            // In reverse mode OR some items already disabled: just disable this one
                             disableItem(key, type)
                         }
 
@@ -349,6 +360,9 @@ angular.module('svc.data', [])
 
                     // drop init params
                     _initUrlParams = null
+                    
+                    // Broadcast that sidebar items are ready
+                    $rootScope.$broadcast('sidebarItemsReady', items);
 
                 },
                 getSideBarItems: function(){
@@ -455,10 +469,41 @@ angular.module('svc.data', [])
                     return _build
                 },
                 setUrlParams: function(params){
-
-                    if(_initUrlParams === null){
+                    // Remove forceUpdate from params if present (internal flag, not for URL)
+                    var forceUpdate = params.forceUpdate;
+                    delete params.forceUpdate;
+                    
+                    if(_initUrlParams === null || forceUpdate){
                         params["target"] = _target
                         _initUrlParams = params
+                        // If sidebar items are already loaded and forceUpdate is true, apply URL params immediately
+                        if(forceUpdate && _sideBarItems && Object.keys(_sideBarItems).length > 0){
+                            // Re-apply URL params to existing sidebar items
+                            $timeout(function(){
+                                if(_initUrlParams && (_initUrlParams.target == _target)){
+                                    // disable everything corresponding to filtered type
+                                    _.mapKeys(_sideBarItems, function(values, type){
+                                        if(type in _initUrlParams && type !== 'buildVersion' && type !== 'target'){
+                                            values.forEach(function(v){
+                                                disableItem(v.key, type)
+                                            })
+                                        }
+                                    })
+                                    
+                                    // only enable urlParams
+                                    _.mapKeys(_initUrlParams, function(values, type){
+                                        if(Object.keys(_availableFilters).indexOf(type) != -1 && type !== 'target'){
+                                            var keys = values.split(",")
+                                            keys.forEach(function(k){
+                                                enableItem(k, type)
+                                            })
+                                        }
+                                    })
+                                    
+                                    _initUrlParams = null
+                                }
+                            }, 100);
+                        }
                     }
                 },
                 setJobsPerPage: function(jobsPerPage) {

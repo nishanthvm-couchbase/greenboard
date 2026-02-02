@@ -11,6 +11,12 @@
         <sidebar-item key="{{buildVersion}}" type="build" show-perc="showPerc" />
   </div>
 
+  <!-- Compare Builds Card -->
+  <a href="/compare-builds" target="_blank" class="compare-builds-card">
+    <i class="fa fa-exchange"></i>
+    <span>Compare Builds</span>
+  </a>
+
   <div ng-if="sidebarItems.serverVersions && sidebarItems.serverVersions[0] != null" class="nav nav-sidebar">
     <div class="nav-header">
       <h3>CB Server Versions</h3>
@@ -96,11 +102,19 @@
       <dif ng-if="targetBy === 'operator'">
         <h3>Kubernetes version</h3>
       </dif>
-      <a ng-click="toggleAll('features')" href="">
-          <i class="fa" ng-class="{'fa-check-square-o': !disabled.features, 'fa-square-o': disabled.features}"></i> all
-      </a>
+      <span class="header-controls">
+        <a ng-click="toggleAll('features')" href="" title="Select/Deselect All">
+            <i class="fa" ng-class="{'fa-check-square-o': !disabled.features, 'fa-square-o': disabled.features}"></i> all
+        </a>
+        <span class="reverse-toggle" ng-click="toggleReverseMode('features')" title="{{reverseMode.features ? 'Exclude Mode: Click to deselect items' : 'Include Mode: Click to select items'}}">
+            <i class="fa" ng-class="{'fa-minus-circle': reverseMode.features, 'fa-plus-circle': !reverseMode.features}"></i>
+        </span>
+        <span class="low-runrate-toggle" ng-class="{'active': lowRunRateFilter.features}" ng-click="toggleLowRunRateFilter('features')" title="{{lowRunRateFilter.features ? 'Show all features' : 'Show only features with <10% run rate'}}">
+            <i class="fa fa-filter"></i>
+        </span>
+      </span>
     </div>
-    <div ng-repeat="key in sidebarItems.features | orderBy:key">
-      <sidebar-item key="{{key}}" type="features"  show-perc="showPerc" />
+    <div ng-repeat="key in getFilteredFeatures() | orderBy:key">
+      <sidebar-item key="{{key}}" type="features" show-perc="showPerc" reverse-mode="reverseMode.features" />
     </div>
   </div>

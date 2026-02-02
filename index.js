@@ -297,6 +297,148 @@ app.get('/release-notes', function(req, res) {
 	res.sendFile(path.join(__dirname, 'app', 'release-notes.html'));
 });
 
+// Serve compare builds page
+app.get('/compare-builds', function(req, res) {
+	res.sendFile(path.join(__dirname, 'app', 'compare-builds.html'));
+});
+
+// API to get all builds for a version (for comparison dropdown)
+app.get('/compare/builds/:bucket/:version', function(req, res) {
+	if (!client) {
+		return res.status(503).send({error: 'Client not initialized'});
+	}
+	var bucket = req.params.bucket;
+	var version = req.params.version;
+	// Allow cross-version comparisons by listing builds across all versions
+	// (queryBuilds uses `build LIKE '${version}%'`, so empty version matches everything).
+	if (version === 'all' || version === '__all__' || version === 'ALL') {
+		version = '';
+	}
+
+	// Allow UI to request a larger list (cap to avoid overload)
+	var limit = parseInt(req.query.limit, 10);
+	if (!Number.isFinite(limit) || limit <= 0) {
+		limit = 500;
+	}
+	limit = Math.min(limit, 2000);
+	
+	client.queryBuilds(bucket, version, 0, limit, {})
+		.then(function(data) {
+			// Return just build names and basic stats
+			var builds = data.map(function(b) {
+				return {
+					build: b.build,
+					totalCount: b.totalCount,
+					failCount: b.failCount,
+					passRate: b.totalCount > 0 ? ((b.totalCount - b.failCount) / b.totalCount * 100).toFixed(1) : 0
+				};
+			});
+			builds.sort(function(a, b) {
+				return b.build.localeCompare(a.build);
+			});
+			res.send(builds);
+		})
+		.catch(function(err) {
+			console.log(err);
+			res.status(500).send({error: 'Failed to fetch builds'});
+		});
+});
+
+// API to get jobs for multiple builds for comparison
+app.get('/compare/jobs/:bucket', function(req, res) {
+	if (!client) {
+		return res.status(503).send({error: 'Client not initialized'});
+	}
+	var bucket = req.params.bucket;
+	var builds = req.query.builds ? req.query.builds.split(',') : [];
+	
+	if (builds.length < 2) {
+		return res.status(400).send({error: 'At least 2 builds required for comparison'});
+	}
+	
+	// Fetch jobs for all selected builds in parallel
+	var jobPromises = builds.map(function(build) {
+		return client.jobsForBuild(bucket, build)
+			.then(function(jobs) {
+				return { build: build, jobs: jobs };
+			})
+			.catch(function(err) {
+				console.log('Error fetching jobs for build', build, err);
+				return { build: build, jobs: [], error: true };
+			});
+	});
+	
+	Promise.all(jobPromises)
+		.then(function(results) {
+			// Process and organize jobs for comparison
+			var jobMap = {}; // key: jobName, value: { jobName, os, component, builds: { buildId: jobData } }
+			var platforms = new Set();
+			var features = new Set();
+			
+			results.forEach(function(result) {
+				var buildId = result.build;
+				result.jobs.forEach(function(job) {
+					// Skip older runs - only use the best run (olderBuild === false or undefined)
+					// This matches how Greenboard main view calculates stats
+					if (job.olderBuild === true) {
+						return;
+					}
+					
+					var jobKey = job.name + '|' + job.os + '|' + job.component;
+					
+					platforms.add(job.os);
+					features.add(job.component);
+					
+					if (!jobMap[jobKey]) {
+						jobMap[jobKey] = {
+							name: job.name,
+							displayName: job.displayName || job.name,
+							os: job.os,
+							component: job.component,
+							builds: {}
+						};
+					}
+					
+					// Store job data for this build (only best run)
+					if (!jobMap[jobKey].builds[buildId]) {
+						var totalCount = job.totalCount || 0;
+						var failCount = job.failCount || 0;
+						var skipCount = job.skipCount || 0;
+						// Passed = total - failed - skipped (matches Greenboard calculation)
+						var passed = totalCount - failCount - skipCount;
+						
+						jobMap[jobKey].builds[buildId] = {
+							passed: passed,
+							failed: failCount,
+							skipped: skipCount,
+							total: totalCount,
+							duration: job.duration || 0,
+							runs: job.runCount || 1,
+							servers: job.servers || [],
+							result: job.result || 'UNKNOWN',
+							url: job.url || '',
+							build_id: job.build_id !== undefined ? job.build_id : ''
+						};
+					}
+				});
+			});
+			
+			// Convert map to array
+			var jobs = Object.values(jobMap);
+			
+			res.send({
+				builds: builds,
+				jobs: jobs,
+				platforms: Array.from(platforms).sort(),
+				features: Array.from(features).sort()
+			});
+		})
+		.catch(function(err) {
+			console.log(err);
+			res.status(500).send({error: 'Failed to fetch comparison data'});
+		});
+});
+
 var server = app.listen(config.httpPort, config.httpListen, function () {
   var addr = server.address();
   if (addr) {

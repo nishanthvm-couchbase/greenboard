@@ -4,11 +4,13 @@ angular.module('app.sidebar', [])
  	  	return {
 	  		restrict: 'E',
 	  		scope: {},
-	  		templateUrl: 'partials/sidebar.html',
+	  		templateUrl: 'partials/sidebar.html?v=' + Date.now(),
 	  		link: function(scope, elem, attrs){
 
 	  		  scope.showPerc = false
 			  scope.disabled = {}
+			  scope.reverseMode = { features: false, platforms: false }
+			  scope.lowRunRateFilter = { features: false, platforms: false }
 
               scope.buildVersion = Data.getBuild()
 			  scope.targetBy = Data.getCurrentTarget()
@@ -18,6 +20,38 @@ angular.module('app.sidebar', [])
 				scope.disabled[type] = isDisabled
 	  		  	Data.toggleAllSidebarItems(type, isDisabled)
 	  		  }
+
+			  scope.toggleReverseMode = function(type) {
+				scope.reverseMode[type] = !scope.reverseMode[type];
+				// Store in Data service so sidebar-item can access it
+				Data.setReverseMode(type, scope.reverseMode[type]);
+			  }
+
+			  scope.toggleLowRunRateFilter = function(type) {
+				scope.lowRunRateFilter[type] = !scope.lowRunRateFilter[type];
+			  }
+
+			  // Filter features based on run rate
+			  scope.getFilteredFeatures = function() {
+				if (!scope.sidebarItems || !scope.sidebarItems.features) {
+					return [];
+				}
+				
+				if (!scope.lowRunRateFilter.features) {
+					return scope.sidebarItems.features;
+				}
+				
+				// Filter features with run rate < 10%
+				return scope.sidebarItems.features.filter(function(featureKey) {
+					var stats = Data.getItemStats(featureKey, 'features');
+					if (!stats || !stats.percStats || !stats.percStats.run) {
+						return false;
+					}
+					// Extract numeric value from run rate (e.g., "5.2%" -> 5.2)
+					var runRate = parseFloat(stats.percStats.run.toString().replace('%', '').replace(/\s/g, ''));
+					return !isNaN(runRate) && runRate < 10;
+				});
+			  }
 			  scope.variantName = function(name) {
 				return name.split("_").map(function(part) {
 					return part[0].toUpperCase() + part.slice(1)
