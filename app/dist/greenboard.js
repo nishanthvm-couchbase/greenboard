@@ -4314,10 +4314,27 @@ angular.module('app.sidebar', [])
 			  scope.reverseMode = { features: false, platforms: false }
 			  scope.lowRunRateFilter = { features: false, platforms: false }
 
+              // Advanced feature threshold filter (replaces the old fixed "<10% run rate" filter)
+              scope.featureThresholdFilter = {
+                enabled: false,
+                metric: 'run_percentage', // 'fail_count' | 'pass_percentage' | 'run_percentage'
+                value: 10
+              };
+              scope.featureThresholdPopoverOpen = false;
+              scope.featureThresholdMetricOptions = [
+                { value: 'fail_count', label: 'Fail count (≥)', isPercent: false },
+                { value: 'pass_percentage', label: 'Pass % (<)', isPercent: true },
+                { value: 'run_percentage', label: 'Run % (<)', isPercent: true }
+              ];
+
               scope.buildVersion = Data.getBuild()
 			  scope.targetBy = Data.getCurrentTarget()
 
 	  		  scope.toggleAll = function(type){
+                // UX: Selecting "all" should reset the feature filter and show everything
+                if (type === 'features') {
+                  scope.clearFeatureThresholdFilter(true /* resetDefaults */);
+                }
 	  		  	var isDisabled = !scope.disabled[type];
 				scope.disabled[type] = isDisabled
 	  		  	Data.toggleAllSidebarItems(type, isDisabled)
@@ -4339,21 +4356,78 @@ angular.module('app.sidebar', [])
 					return [];
 				}
 				
-				if (!scope.lowRunRateFilter.features) {
+				// If advanced filter is disabled, show all features
+				if (!scope.featureThresholdFilter || !scope.featureThresholdFilter.enabled) {
 					return scope.sidebarItems.features;
 				}
-				
-				// Filter features with run rate < 10%
+
+				var metric = scope.featureThresholdFilter.metric || 'run_percentage';
+				var rawValue = scope.featureThresholdFilter.value;
+				var threshold = (rawValue === 0 || rawValue) ? parseFloat(rawValue) : NaN;
+				if (isNaN(threshold)) {
+					threshold = metric === 'fail_count' ? 1 : 10;
+				}
+
 				return scope.sidebarItems.features.filter(function(featureKey) {
 					var stats = Data.getItemStats(featureKey, 'features');
-					if (!stats || !stats.percStats || !stats.percStats.run) {
+					if (!stats) {
 						return false;
 					}
-					// Extract numeric value from run rate (e.g., "5.2%" -> 5.2)
-					var runRate = parseFloat(stats.percStats.run.toString().replace('%', '').replace(/\s/g, ''));
-					return !isNaN(runRate) && runRate < 10;
+
+					if (metric === 'fail_count') {
+						var fails = stats.absStats ? (stats.absStats.failed || 0) : 0;
+						return fails >= threshold;
+					}
+
+					if (metric === 'pass_percentage') {
+						// Prefer numeric raw value if available
+						var passPerc = (stats.percStats && (stats.percStats.passedRaw !== undefined && stats.percStats.passedRaw !== null))
+							? parseFloat(stats.percStats.passedRaw)
+							: NaN;
+						if (isNaN(passPerc) && stats.percStats && stats.percStats.passed) {
+							passPerc = parseFloat(stats.percStats.passed.toString().replace('%', '').replace(/\s/g, ''));
+						}
+						return !isNaN(passPerc) && passPerc < threshold;
+					}
+
+					// Default: run percentage
+					var runRate = NaN;
+					if (stats.percStats && stats.percStats.run) {
+						runRate = parseFloat(stats.percStats.run.toString().replace('%', '').replace(/\s/g, ''));
+					}
+					return !isNaN(runRate) && runRate < threshold;
 				});
 			  }
+
+              scope.toggleFeatureThresholdPopover = function($event) {
+                if ($event && $event.stopPropagation) $event.stopPropagation();
+                // Inline panel: just toggle visibility
+                scope.featureThresholdPopoverOpen = !scope.featureThresholdPopoverOpen;
+              };
+
+              scope.applyFeatureThresholdFilter = function() {
+                scope.featureThresholdFilter.enabled = true;
+                scope.featureThresholdPopoverOpen = false;
+              };
+
+              scope.clearFeatureThresholdFilter = function(resetDefaults) {
+                scope.featureThresholdFilter.enabled = false;
+                scope.featureThresholdPopoverOpen = false;
+                if (resetDefaults) {
+                  scope.featureThresholdFilter.metric = 'run_percentage';
+                  scope.featureThresholdFilter.value = 10;
+                }
+              };
+
+              scope.closeFeatureThresholdPopover = function() {
+                scope.featureThresholdPopoverOpen = false;
+              };
+
+              scope.getFeatureThresholdSuffix = function() {
+                return (scope.featureThresholdFilter.metric === 'fail_count') ? '' : '%';
+              };
+
+              // No global click/scroll listeners needed anymore (inline panel)
 			  scope.variantName = function(name) {
 				return name.split("_").map(function(part) {
 					return part[0].toUpperCase() + part.slice(1)
