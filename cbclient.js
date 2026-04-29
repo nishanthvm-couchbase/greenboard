@@ -939,28 +939,60 @@ module.exports = async function () {
 
             const dispatcherParams = JSON.parse(parameters.dispatcher_params.slice(11));
 
-            // TODO: Remove when CBQE-6336 fixed
+            const dispatcherUrl = dispatcherParams.dispatcher_url;
+
+            let triggerParams;
             if (!dispatcherParams.component) {
+                // New format: dispatcher_params only has build_url/dispatcher_url
+                // Use top-level build parameters directly
+                console.log("[rerunJob] new dispatcher format detected, using top-level parameters");
+                triggerParams = { ...parameters };
+                delete triggerParams.dispatcher_params;
+            } else {
+                triggerParams = dispatcherParams;
+            }
+
+            if (!triggerParams.component) {
                 throw Error("Invalid dispatcher params");
             }
 
             if (["ABORTED", "FAILURE"].includes(info.result)) {
-                dispatcherParams.fresh_run = true;
+                triggerParams.fresh_run = true;
             } else {
-                dispatcherParams.fresh_run = false;
+                triggerParams.fresh_run = false;
             }
 
-            dispatcherParams.component = parameters.component;
-            dispatcherParams.subcomponent = parameters.subcomponent;
+            triggerParams.component = parameters.component;
+            triggerParams.subcomponent = parameters.subcomponent;
 
-            const [, , dispatcherName] = new URL(dispatcherParams.dispatcher_url).pathname.split("/");
+            // Try to read slave label from the previous dispatcher build, fall back to "dispatcher"
+            let slaveLabel = "dispatcher";
+            if (dispatcherParams.build_url) {
+                try {
+                    const dispatcherJenkins = getJenkins(dispatcherParams.build_url);
+                    const [, , dispatcherBuildName, dispatcherBuildNumberStr] = new URL(dispatcherParams.build_url).pathname.split("/");
+                    const dispatcherBuildNumber = parseInt(dispatcherBuildNumberStr);
+                    const dispatcherInfo = await dispatcherJenkins.build.get(dispatcherBuildName, dispatcherBuildNumber);
+                    const dispatcherBuildParams = getParameters(dispatcherInfo);
+                    if (dispatcherBuildParams.slave) {
+                        slaveLabel = dispatcherBuildParams.slave;
+                    }
+                } catch (e) {
+                    console.warn("[rerunJob] could not fetch dispatcher build params, falling back to 'dispatcher' slave:", e.message);
+                }
+            }
+            triggerParams.slave = slaveLabel;
 
-            delete dispatcherParams.dispatcher_url;
+            const [, , dispatcherName] = new URL(dispatcherUrl).pathname.split("/");
+
+            delete triggerParams.dispatcher_url;
 
             // Use the first server pool if there are multiple (see CBQE-7223)
-            dispatcherParams.serverPoolId = dispatcherParams.serverPoolId.split(",")[0];
+            if (triggerParams.serverPoolId) {
+                triggerParams.serverPoolId = triggerParams.serverPoolId.split(",")[0];
+            }
 
-            await jenkins.job.build({ name: dispatcherName, parameters: dispatcherParams });
+            await jenkins.job.build({ name: dispatcherName, parameters: triggerParams });
         },
         getTrend: async function (docId) {
             try {
@@ -995,5 +1027,4 @@ function getParameters(info) {
     }
     return parameters;
 }
-
 
