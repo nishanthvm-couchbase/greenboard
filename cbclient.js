@@ -107,7 +107,13 @@ async function _getmulti(bucket, docIds, retries = 2) {
             } catch (err) {
                 lastError = err;
                 // Document might not exist, return null
-                if (err.code === 13) { // KEY_ENOENT
+                // SDK error shapes vary: sometimes `err.code === 13`, sometimes `err.name === 'DocumentNotFoundError'`
+                // with `err.cause.code === 101`.
+                const notFound =
+                    err.code === 13 || // KEY_ENOENT
+                    err.name === 'DocumentNotFoundError' ||
+                    (err.cause && (err.cause.code === 101 || err.cause.name === 'document_not_found'));
+                if (notFound) {
                     return { id: docId, value: null, cas: null };
                 }
                 // Retry on timeout errors (code 14 = unambiguous_timeout)
@@ -230,29 +236,140 @@ module.exports = async function () {
         queryBucket: async function (bucket, queryStr) {
             return await _query(bucket, queryStr);
         },
-        queryBuilds: async function (bucket, version, testsFilter, buildsFilter) {
-            var Q = "SELECT totalCount, failCount, `build` FROM `greenboard` WHERE `build` LIKE '" + version + "%' " +
-                " AND type = '" + bucket + "' AND totalCount >= " + testsFilter + " ORDER BY `build` DESC limit " + buildsFilter;
+        queryBuilds: async function (bucket, version, testsFilter, buildsFilter, filters) {
+            // Query build documents directly (doc ids are `${build}_${bucket}`)
+            // This avoids duplicates from job documents and ensures the list is complete.
+            // Example id: `8.1.0-1442_server`
+            var Q =
+                "SELECT DISTINCT SPLIT(META().id,'_')[0] AS `build` " +
+                "FROM `greenboard` " +
+                "WHERE META().id LIKE '" + version + "%_" + bucket + "' " +
+                " AND META().id NOT LIKE 'existing_%' " +
+                "ORDER BY `build` DESC " +
+                "LIMIT " + buildsFilter;
 
-            function processBuild(data) {
-                var builds = _.map(data, function (buildSet) {
-                    var total = buildSet.totalCount;
-                    var failed = buildSet.failCount;
-                    var passed = total - failed;
-                    return {
-                        Failed: failed,
-                        Passed: passed,
-                        build: buildSet.build
-                    };
+            // Parse filters - expect comma-separated values
+            var platformFilters = filters && filters.platforms ? filters.platforms.split(',') : null;
+            var componentFilters = filters && filters.features ? filters.features.split(',') : null;
+
+            // Calculate totals from individual jobs, excluding olderBuild and deleted jobs
+            // Also returns breakdown by OS and component for client-side filtering
+            function calculateBuildTotals(buildDoc, includeBreakdown) {
+                var totalCount = 0;
+                var failCount = 0;
+                var skipCount = 0;
+                var breakdown = {}; // { os: { component: { total, fail, skip } } }
+                
+                if (!buildDoc || !buildDoc.os) {
+                    return { totalCount: 0, failCount: 0, skipCount: 0, breakdown: {} };
+                }
+                
+                _.forEach(buildDoc.os, function(components, osName) {
+                    // For breakdown, always include all; for totals, apply filter
+                    var includeInTotal = !platformFilters || platformFilters.includes(osName);
+                    
+                    if (includeBreakdown) {
+                        breakdown[osName] = breakdown[osName] || {};
+                    }
+                    
+                    _.forEach(components, function(jobs, componentName) {
+                        var includeComponent = !componentFilters || componentFilters.includes(componentName);
+                        
+                        var osTotalCount = 0;
+                        var osFailCount = 0;
+                        var osSkipCount = 0;
+                        
+                        _.forEach(jobs, function(runs, jobName) {
+                            if (!Array.isArray(runs)) return;
+                            _.forEach(runs, function(run) {
+                                // Skip olderBuild and deleted jobs - same logic as sidebar
+                                if (run.olderBuild === true || run.deleted === true) {
+                                    return;
+                                }
+                                osTotalCount += (run.totalCount || 0);
+                                osFailCount += (run.failCount || 0);
+                                osSkipCount += (run.skipCount || 0);
+                            });
+                        });
+                        
+                        // Store breakdown for client-side filtering
+                        if (includeBreakdown) {
+                            breakdown[osName][componentName] = {
+                                total: osTotalCount,
+                                fail: osFailCount,
+                                skip: osSkipCount
+                            };
+                        }
+                        
+                        // Add to totals if filters match
+                        if (includeInTotal && includeComponent) {
+                            totalCount += osTotalCount;
+                            failCount += osFailCount;
+                            skipCount += osSkipCount;
+                        }
+                    });
                 });
-                return builds;
+                
+                return { totalCount, failCount, skipCount, breakdown };
             }
 
             async function queryBuild() {
                 try {
-                    const data = await _query(bucket, Q);
-                    buildsResponseCache[version] = _.cloneDeep(data);
-                    return processBuild(data);
+                    // First get the list of builds
+                    const buildList = await _query(bucket, Q);
+                    
+                    if (!buildList || buildList.length === 0) {
+                        return [];
+                    }
+                    
+                    // Fetch full documents to calculate correct totals
+                    const docIds = buildList.map(b => b.build + "_" + bucket);
+                    const docs = await _getmulti('greenboard', docIds);
+                    
+                    var builds = [];
+                    for (const buildInfo of buildList) {
+                        const docId = buildInfo.build + "_" + bucket;
+                        const doc = docs[docId]?.value;
+                        
+                        if (!doc) continue;
+                        
+                        // Handle Buffer if needed (same as jobsForBuild)
+                        let buildDoc = doc;
+                        if (Buffer.isBuffer(doc)) {
+                            try {
+                                let docString = doc.toString();
+                                docString = docString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                                buildDoc = JSON.parse(docString);
+                            } catch (parseError) {
+                                console.error("Failed to parse build document:", parseError.message);
+                                continue;
+                            }
+                        }
+                        
+                        // Calculate totals - include breakdown only on initial load (no filters)
+                        var includeBreakdown = !platformFilters && !componentFilters;
+                        const totals = calculateBuildTotals(buildDoc, includeBreakdown);
+                        
+                        // Apply testsFilter on calculated totals
+                        if (totals.totalCount >= testsFilter) {
+                            var passed = totals.totalCount - totals.failCount - totals.skipCount;
+                            var buildData = {
+                                Failed: totals.failCount,
+                                Passed: passed,
+                                build: buildInfo.build
+                            };
+                            
+                            // Include breakdown for client-side filtering (only on initial load)
+                            if (includeBreakdown && totals.breakdown) {
+                                buildData.breakdown = totals.breakdown;
+                            }
+                            
+                            builds.push(buildData);
+                        }
+                    }
+                    
+                    buildsResponseCache[version] = _.cloneDeep(builds);
+                    return builds;
                 } catch (err) {
                     console.error(err);
                     throw err;
@@ -822,28 +939,60 @@ module.exports = async function () {
 
             const dispatcherParams = JSON.parse(parameters.dispatcher_params.slice(11));
 
-            // TODO: Remove when CBQE-6336 fixed
+            const dispatcherUrl = dispatcherParams.dispatcher_url;
+
+            let triggerParams;
             if (!dispatcherParams.component) {
+                // New format: dispatcher_params only has build_url/dispatcher_url
+                // Use top-level build parameters directly
+                console.log("[rerunJob] new dispatcher format detected, using top-level parameters");
+                triggerParams = { ...parameters };
+                delete triggerParams.dispatcher_params;
+            } else {
+                triggerParams = dispatcherParams;
+            }
+
+            if (!triggerParams.component) {
                 throw Error("Invalid dispatcher params");
             }
 
             if (["ABORTED", "FAILURE"].includes(info.result)) {
-                dispatcherParams.fresh_run = true;
+                triggerParams.fresh_run = true;
             } else {
-                dispatcherParams.fresh_run = false;
+                triggerParams.fresh_run = false;
             }
 
-            dispatcherParams.component = parameters.component;
-            dispatcherParams.subcomponent = parameters.subcomponent;
+            triggerParams.component = parameters.component;
+            triggerParams.subcomponent = parameters.subcomponent;
 
-            const [, , dispatcherName] = new URL(dispatcherParams.dispatcher_url).pathname.split("/");
+            // Try to read slave label from the previous dispatcher build, fall back to "dispatcher"
+            let slaveLabel = "dispatcher";
+            if (dispatcherParams.build_url) {
+                try {
+                    const dispatcherJenkins = getJenkins(dispatcherParams.build_url);
+                    const [, , dispatcherBuildName, dispatcherBuildNumberStr] = new URL(dispatcherParams.build_url).pathname.split("/");
+                    const dispatcherBuildNumber = parseInt(dispatcherBuildNumberStr);
+                    const dispatcherInfo = await dispatcherJenkins.build.get(dispatcherBuildName, dispatcherBuildNumber);
+                    const dispatcherBuildParams = getParameters(dispatcherInfo);
+                    if (dispatcherBuildParams.slave) {
+                        slaveLabel = dispatcherBuildParams.slave;
+                    }
+                } catch (e) {
+                    console.warn("[rerunJob] could not fetch dispatcher build params, falling back to 'dispatcher' slave:", e.message);
+                }
+            }
+            triggerParams.slave = slaveLabel;
 
-            delete dispatcherParams.dispatcher_url;
+            const [, , dispatcherName] = new URL(dispatcherUrl).pathname.split("/");
+
+            delete triggerParams.dispatcher_url;
 
             // Use the first server pool if there are multiple (see CBQE-7223)
-            dispatcherParams.serverPoolId = dispatcherParams.serverPoolId.split(",")[0];
+            if (triggerParams.serverPoolId) {
+                triggerParams.serverPoolId = triggerParams.serverPoolId.split(",")[0];
+            }
 
-            await jenkins.job.build({ name: dispatcherName, parameters: dispatcherParams });
+            await jenkins.job.build({ name: dispatcherName, parameters: triggerParams });
         },
         getTrend: async function (docId) {
             try {
@@ -878,5 +1027,3 @@ function getParameters(info) {
     }
     return parameters;
 }
-
-
