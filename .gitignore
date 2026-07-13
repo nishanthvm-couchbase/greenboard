@@ -1,3 +1,22 @@
-node_modules
-app/node_modules
-app/bower_components
+# dependencies / build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.log
+
+# local overrides
+config.local.js
+
+# secrets — NEVER commit
+jenkinsCredentials.json
+certs/
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*token*.txt
+*secret*
+oauth*.json
+jira_oauth*.json
+.jira_tokens.json
